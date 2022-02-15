@@ -19,7 +19,7 @@ package transport
 import (
 	"time"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/endpoint"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -52,10 +52,13 @@ func newGrpcServer(opts *options) (*grpcServer, error) {
 	}, nil
 }
 
+// start runs the GRPC server
 func (s *grpcServer) start() error {
-	pb.RegisterEndpointServer(s.server, s.opts.Impl)
+	pb.RegisterMsmControlPlaneServer(s.server, s.opts.GrpcImpl)
 	l := s.opts.GrpcListener
-	s.opts.Logger.Info("starting gRPC server", "addr", l.Addr().String())
+	log := s.opts.Logger
+
+	log.Infof("Starting GRPC server on addr: %s", l.Addr().String())
 	return s.server.Serve(l)
 }
 

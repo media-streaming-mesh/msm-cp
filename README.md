@@ -1,1 +1,1 @@
-# msm-rtsp-cp
+# MSM Control Plane
