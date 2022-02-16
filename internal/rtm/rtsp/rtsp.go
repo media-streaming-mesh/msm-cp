@@ -19,7 +19,6 @@ package rtsp
 import (
 	"context"
 	"github.com/sirupsen/logrus"
-
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
@@ -74,6 +73,12 @@ func (r *RTSP) Connect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, e
 func (r *RTSP) Message(ctx context.Context, cr *pb.Request) (*pb.Response, error) {
 	r.logger.Debugf("Got message request: %+v", cr)
 
+	// read request
+	req, err := readRequest([]byte(cr.Request))
+	if err != nil {
+		r.logger.Error("Could not read request: %s", err)
+		return nil, err
+	}
 	return &pb.Response{
 		Response: "CP response",
 	}, nil
