@@ -15,3 +15,58 @@
  */
 
 package transport
+
+import (
+	"context"
+	"net"
+
+	"github.com/sirupsen/logrus"
+
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+)
+
+// Option configures Run
+type Option func(*options)
+
+// options configure the transport
+// options are passed through run and normally are set with flags
+// or a configuration file before the start of the MSM control plane
+type options struct {
+	// Context is the context to use for the transport.
+	Context context.Context
+
+	// Logger is the logger to use.
+	Logger *logrus.Logger
+
+	// GRPCListener sets up the gRPC server
+	GrpcListener net.Listener
+
+	// Impl is the backend implementation to use for the grpc transport
+	GrpcImpl pb.MsmControlPlaneServer
+}
+
+// UseContext sets the context for the server
+func UseContext(ctx context.Context) Option {
+	return func(opts *options) {
+		opts.Context = ctx
+	}
+}
+
+// UseLogger sets the logger
+func UseLogger(log *logrus.Logger) Option {
+	return func(opts *options) {
+		opts.Logger = log
+	}
+}
+
+// UseListener sets the GRPC listener
+func UseListener(ln net.Listener) Option {
+	return func(opts *options) { opts.GrpcListener = ln }
+}
+
+// UseImpl sets the grpc implementation to serve
+func UseImpl(impl pb.MsmControlPlaneServer) Option {
+	return func(opts *options) {
+		opts.GrpcImpl = impl
+	}
+}
