@@ -17,7 +17,11 @@
 package rtsp
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"strings"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -74,12 +78,16 @@ func (r *RTSP) Message(ctx context.Context, cr *pb.Request) (*pb.Response, error
 	r.logger.Debugf("Got message request: %+v", cr)
 
 	// read request
-	req, err := readRequest([]byte(cr.Request))
+	rr := bufio.NewReader(strings.NewReader(cr.Request))
+
+	req, err := readRequest(rr)
 	if err != nil {
 		r.logger.Error("Could not read request: %s", err)
 		return nil, err
 	}
+
+	res := r.handleRequest(req)
 	return &pb.Response{
-		Response: "CP response",
+		Response: fmt.Sprintf("s", res),
 	}, nil
 }
