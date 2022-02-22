@@ -19,7 +19,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"google.golang.org/grpc"
@@ -28,7 +32,7 @@ import (
 func main() {
 	fmt.Printf("Starting grpc client...\n")
 
-	conn, err := grpc.Dial("127.0.0.1:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:50051", grpc.WithInsecure())
 	if err != nil {
 		fmt.Printf("Failed to connect to server, error %s\n", err)
 		fmt.Printf("Exiting...\n")
@@ -37,28 +41,64 @@ func main() {
 	defer conn.Close()
 
 	client := pb.NewMsmControlPlaneClient(conn)
-	ctx := context.Background()
-
-	req := &pb.Endpoints{
-		Source: "192.168.1.1",
-		Dest:   "10.0.0.1",
-	}
-
-	res, err := client.ClientConnect(ctx, req)
+	stream, err := client.Connect(context.Background())
 	if err != nil {
-		fmt.Println("Houston, we've got a problem!")
+		log.Fatalf("openn stream error %v", err)
 	}
-	fmt.Printf("Response: %+v\n", res)
 
-	cReq := &pb.Request{
-		Request: "SETUP rtsp://localhost:8554/foo",
-	}
-	res2, err := client.ClientRequest(ctx, cReq)
-	if err != nil {
-		fmt.Println("Houston, we've got a problem!")
-	}
-	fmt.Printf("Response: %+v\n", res2)
+	ctx := stream.Context()
+	done := make(chan bool)
 
-	fmt.Printf("GrpcClient done...\n")
+	// send data with increasing numbers
+	go func() {
+		for i := 1; i <= 10; i++ {
+
+			rnd := int32(rand.Intn(i))
+			str := "OPTIONS rtsp://localhost:8554/foo RTSP/1.0\\r\\nCSeq: 2\\r\\nUser-Agent: LibVLC/3.0.16 (LIVE555 Streaming Media v2016.11.28)"
+			req := pb.Request{
+				Event: pb.Event_RTSP_DATA,
+				Message: &pb.Message{
+					Local:  "172.16.1.100",
+					Remote: "11.213.42.1",
+					Data:   fmt.Sprintf("%s%d", str, rnd),
+				},
+			}
+			if err := stream.Send(&req); err != nil {
+				log.Fatalf("can not send %v", err)
+			}
+
+			time.Sleep(time.Millisecond * 200)
+		}
+		if err := stream.CloseSend(); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	// receive from server on a separate goroutine
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				close(done)
+				return
+			}
+			if err != nil {
+				log.Fatalf("can not receive %v", err)
+			}
+			r := resp.Data
+			log.Printf("new max %d received", r)
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		if err := ctx.Err(); err != nil {
+			log.Println(err)
+		}
+		close(done)
+	}()
+
+	<-done
+	log.Printf("finished client side")
 
 }
