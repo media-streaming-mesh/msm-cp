@@ -7,7 +7,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,10 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MsmControlPlaneClient interface {
-	ClientConnect(ctx context.Context, in *Endpoints, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ClientRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	ServerConnect(ctx context.Context, in *Endpoints, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ServerRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	Connect(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_ConnectClient, error)
 }
 
 type msmControlPlaneClient struct {
@@ -33,67 +29,50 @@ func NewMsmControlPlaneClient(cc grpc.ClientConnInterface) MsmControlPlaneClient
 	return &msmControlPlaneClient{cc}
 }
 
-func (c *msmControlPlaneClient) ClientConnect(ctx context.Context, in *Endpoints, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/msm_cp.MsmControlPlane/ClientConnect", in, out, opts...)
+func (c *msmControlPlaneClient) Connect(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_ConnectClient, error) {
+	stream, err := c.cc.NewStream(ctx, &MsmControlPlane_ServiceDesc.Streams[0], "/msm_cp.MsmControlPlane/Connect", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &msmControlPlaneConnectClient{stream}
+	return x, nil
 }
 
-func (c *msmControlPlaneClient) ClientRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/msm_cp.MsmControlPlane/ClientRequest", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+type MsmControlPlane_ConnectClient interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+	grpc.ClientStream
 }
 
-func (c *msmControlPlaneClient) ServerConnect(ctx context.Context, in *Endpoints, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/msm_cp.MsmControlPlane/ServerConnect", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+type msmControlPlaneConnectClient struct {
+	grpc.ClientStream
 }
 
-func (c *msmControlPlaneClient) ServerRequest(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/msm_cp.MsmControlPlane/ServerRequest", in, out, opts...)
-	if err != nil {
+func (x *msmControlPlaneConnectClient) Send(m *Message) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *msmControlPlaneConnectClient) Recv() (*Message, error) {
+	m := new(Message)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return m, nil
 }
 
 // MsmControlPlaneServer is the server API for MsmControlPlane service.
 // All implementations should embed UnimplementedMsmControlPlaneServer
 // for forward compatibility
 type MsmControlPlaneServer interface {
-	ClientConnect(context.Context, *Endpoints) (*emptypb.Empty, error)
-	ClientRequest(context.Context, *Request) (*Response, error)
-	ServerConnect(context.Context, *Endpoints) (*emptypb.Empty, error)
-	ServerRequest(context.Context, *Request) (*Response, error)
+	Connect(MsmControlPlane_ConnectServer) error
 }
 
 // UnimplementedMsmControlPlaneServer should be embedded to have forward compatible implementations.
 type UnimplementedMsmControlPlaneServer struct {
 }
 
-func (UnimplementedMsmControlPlaneServer) ClientConnect(context.Context, *Endpoints) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ClientConnect not implemented")
-}
-func (UnimplementedMsmControlPlaneServer) ClientRequest(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ClientRequest not implemented")
-}
-func (UnimplementedMsmControlPlaneServer) ServerConnect(context.Context, *Endpoints) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ServerConnect not implemented")
-}
-func (UnimplementedMsmControlPlaneServer) ServerRequest(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ServerRequest not implemented")
+func (UnimplementedMsmControlPlaneServer) Connect(MsmControlPlane_ConnectServer) error {
+	return status.Errorf(codes.Unimplemented, "method Connect not implemented")
 }
 
 // UnsafeMsmControlPlaneServer may be embedded to opt out of forward compatibility for this service.
@@ -107,76 +86,30 @@ func RegisterMsmControlPlaneServer(s grpc.ServiceRegistrar, srv MsmControlPlaneS
 	s.RegisterService(&MsmControlPlane_ServiceDesc, srv)
 }
 
-func _MsmControlPlane_ClientConnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Endpoints)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsmControlPlaneServer).ClientConnect(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/msm_cp.MsmControlPlane/ClientConnect",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsmControlPlaneServer).ClientConnect(ctx, req.(*Endpoints))
-	}
-	return interceptor(ctx, in, info, handler)
+func _MsmControlPlane_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MsmControlPlaneServer).Connect(&msmControlPlaneConnectServer{stream})
 }
 
-func _MsmControlPlane_ClientRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsmControlPlaneServer).ClientRequest(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/msm_cp.MsmControlPlane/ClientRequest",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsmControlPlaneServer).ClientRequest(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
+type MsmControlPlane_ConnectServer interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+	grpc.ServerStream
 }
 
-func _MsmControlPlane_ServerConnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Endpoints)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsmControlPlaneServer).ServerConnect(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/msm_cp.MsmControlPlane/ServerConnect",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsmControlPlaneServer).ServerConnect(ctx, req.(*Endpoints))
-	}
-	return interceptor(ctx, in, info, handler)
+type msmControlPlaneConnectServer struct {
+	grpc.ServerStream
 }
 
-func _MsmControlPlane_ServerRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
+func (x *msmControlPlaneConnectServer) Send(m *Message) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *msmControlPlaneConnectServer) Recv() (*Message, error) {
+	m := new(Message)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(MsmControlPlaneServer).ServerRequest(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/msm_cp.MsmControlPlane/ServerRequest",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsmControlPlaneServer).ServerRequest(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 // MsmControlPlane_ServiceDesc is the grpc.ServiceDesc for MsmControlPlane service.
@@ -185,24 +118,14 @@ func _MsmControlPlane_ServerRequest_Handler(srv interface{}, ctx context.Context
 var MsmControlPlane_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "msm_cp.MsmControlPlane",
 	HandlerType: (*MsmControlPlaneServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "ClientConnect",
-			Handler:    _MsmControlPlane_ClientConnect_Handler,
-		},
-		{
-			MethodName: "ClientRequest",
-			Handler:    _MsmControlPlane_ClientRequest_Handler,
-		},
-		{
-			MethodName: "ServerConnect",
-			Handler:    _MsmControlPlane_ServerConnect_Handler,
-		},
-		{
-			MethodName: "ServerRequest",
-			Handler:    _MsmControlPlane_ServerRequest_Handler,
+			StreamName:    "Connect",
+			Handler:       _MsmControlPlane_Connect_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "msm_cp.proto",
 }
