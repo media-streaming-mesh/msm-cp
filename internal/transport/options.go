@@ -64,8 +64,8 @@ func UseListener(ln net.Listener) Option {
 	return func(opts *options) { opts.GrpcListener = ln }
 }
 
-// UseImpl sets the grpc implementation to serve
-func UseImpl(impl pb.MsmControlPlaneServer) Option {
+// UseGrpcImpl sets the grpc implementation to serve
+func UseGrpcImpl(impl pb.MsmControlPlaneServer) Option {
 	return func(opts *options) {
 		opts.GrpcImpl = impl
 	}
