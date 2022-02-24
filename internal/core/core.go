@@ -66,7 +66,7 @@ func (a *App) Start() error {
 		transport.UseContext(ctx),
 		transport.UseLogger(logger),
 		transport.UseListener(ln),
-		transport.UseImpl(a.rpcImpl),
+		transport.UseGrpcImpl(a.rpcImpl),
 	}
 
 	var startTransportErr = make(chan error)
