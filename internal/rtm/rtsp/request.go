@@ -62,12 +62,12 @@ type Request struct {
 	Content []byte
 }
 
-func (c *RTSP) handleRequest(req *Request) *Response {
-	c.logger.Debugf("Method %s, URL %s", string(req.Method), req.Url.String())
+func (r *RTSP) handleRequest(req *Request) *Response {
+	r.logger.Debugf("Method %s, URL %s", string(req.Method), req.Url.String())
 
 	cseq, ok := req.Header["CSeq"]
 	if !ok || len(cseq) != 1 {
-		return c.writeResError(req, StatusBadRequest, fmt.Errorf("cseq missing"))
+		return r.writeResError(req, StatusBadRequest, fmt.Errorf("cseq missing"))
 	}
 
 	path := func() string {
@@ -85,7 +85,97 @@ func (c *RTSP) handleRequest(req *Request) *Response {
 
 		return ret
 	}()
-	c.logger.Debugf("this is the path: %s", path)
+
+	r.logger.Debugf("This is the path: %s", path)
+
+	switch req.Method {
+	case OPTIONS:
+		// do not check state, since OPTIONS can be requested
+		// in any state
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq": []string{cseq[0]},
+				"Public": []string{strings.Join([]string{
+					string(DESCRIBE),
+					string(SETUP),
+					string(PLAY),
+					string(PAUSE),
+					string(TEARDOWN),
+				}, ", ")},
+			},
+		}
+
+	case DESCRIBE:
+
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq":         []string{cseq[0]},
+				"Content-Base": []string{req.Url.String() + "/"},
+				"Content-Type": []string{"application/sdp"},
+			},
+			// todo - content func
+			Content: []byte{},
+		}
+
+	case SETUP:
+		tsRaw, ok := req.Header["Transport"]
+		if !ok || len(tsRaw) != 1 {
+			return r.writeResError(req, StatusBadRequest, fmt.Errorf("transport header missing"))
+		}
+
+		th := ReadHeaderTransport(tsRaw[0])
+		if _, ok := th["multicast"]; ok {
+			return r.writeResError(req, StatusBadRequest, fmt.Errorf("multicast is not supported"))
+		}
+
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq": []string{cseq[0]},
+				"Transport": []string{strings.Join([]string{
+					"RTP/AVP/UDP",
+					"unicast",
+					fmt.Sprintf("client_port=%d-%d", 4132, 4324),
+					fmt.Sprintf("server_port=%d-%d", 5342, 5435),
+				}, ";")},
+				"Session": []string{"12345678"},
+			},
+		}
+
+	case PLAY:
+
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq":    []string{cseq[0]},
+				"Session": []string{"12345678"},
+			},
+		}
+
+	case PAUSE:
+
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq":    []string{cseq[0]},
+				"Session": []string{"12345678"},
+			},
+		}
+
+	case TEARDOWN:
+
+		return &Response{
+			StatusCode: StatusOK,
+			Header: Header{
+				"CSeq": []string{cseq[0]},
+			},
+		}
+
+	default:
+		r.writeResError(req, StatusBadRequest, fmt.Errorf("unhandled method '%s'", req.Method))
+	}
 
 	return nil
 }
