@@ -21,10 +21,11 @@ import (
 	"net"
 	"sync"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/endpoint"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/sirupsen/logrus"
 )
 
+// Server holds the server specific data structures
 type Server struct {
 	log logrus.Logger
 
@@ -38,7 +39,7 @@ type Option func(*options)
 
 // options configure the transport
 // options are passed through run and normally are set with flags
-// or a configuraion file before the start of the MSM control plane
+// or a configuration file before the start of the MSM control plane
 type options struct {
 	// Context is the context to use for the transport.
 	Context context.Context
@@ -49,8 +50,8 @@ type options struct {
 	// GRPCListener sets up the gRPC server
 	GrpcListener net.Listener
 
-	// Impl is the backend implementation to use for the transp.
-	Impl pb.EndpointServer
+	// Impl is the backend implementation to use for the grpc transport
+	GrpcImpl pb.MsmControlPlaneServer
 }
 
 // UseContext sets the context for the server
@@ -60,22 +61,22 @@ func UseContext(ctx context.Context) Option {
 	}
 }
 
-// UseLogger sets the logger.
+// UseLogger sets the logger
 func UseLogger(log *logrus.Logger) Option {
 	return func(opts *options) {
 		opts.Logger = log
 	}
 }
 
-// UseListener sets the GRPC listener.
+// UseListener sets the GRPC listener
 func UseListener(ln net.Listener) Option {
 	return func(opts *options) { opts.GrpcListener = ln }
 }
 
-// UseImpl sets the grpc implementation to serve.
-func UseImpl(impl pb.EndpointServer) Option {
+// UseImpl sets the grpc implementation to serve
+func UseImpl(impl pb.MsmControlPlaneServer) Option {
 	return func(opts *options) {
-		opts.Impl = impl
+		opts.GrpcImpl = impl
 	}
 }
 
@@ -99,7 +100,7 @@ func Run(opts ...Option) error {
 	go func() {
 		err := grpcServer.start()
 		gprcErrs <- err
-		log.Debug("gRPC server has exited", "err", err)
+		log.Debug("GRPC server has exited", "err", err)
 		wg.Done()
 	}()
 
@@ -109,7 +110,7 @@ func Run(opts ...Option) error {
 
 	select {
 	case err := <-gprcErrs:
-		log.Error("failed running the grpc server", "err", err)
+		log.Error("failed to run the GRPC server", "err", err)
 		return err
 	case <-cfg.Context.Done():
 		grpcServer.close()

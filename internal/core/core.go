@@ -31,7 +31,8 @@ import (
 
 // App contains minimal list of dependencies to be able to start an application.
 type App struct {
-	cfg     *config.Cfg
+	cfg *config.Cfg
+
 	rpcImpl rtm.API
 }
 

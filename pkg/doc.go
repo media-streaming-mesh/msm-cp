@@ -14,25 +14,4 @@
  * limitations under the License.
  */
 
-package rtm
-
-import (
-	"context"
-
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/endpoint"
-)
-
-type RTSP struct {
-	message string
-}
-
-func NewRTSP() *RTSP {
-
-	return &RTSP{
-		message: "test1",
-	}
-}
-
-func (r *RTSP) GetEndpoint(ctx context.Context, in *pb.EndpointRequest) (*pb.EndpointResponse, error) {
-	return &pb.EndpointResponse{EndpointAddr: r.message}, nil
-}
+package pkg
