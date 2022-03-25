@@ -20,12 +20,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"strings"
-
-	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/types/known/emptypb"
-
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/sirupsen/logrus"
+	"io"
+	"strings"
 )
 
 type RTSP struct {
@@ -68,26 +66,51 @@ func NewRTSP(opts ...Option) *RTSP {
 	}
 }
 
-func (r *RTSP) Connect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, error) {
-	r.logger.Debugf("Got endpoint Connect: %+v", cc)
+func (r *RTSP) Connect(srv pb.MsmControlPlane_ConnectServer) error {
+	r.logger.Debugf("start new server")
+	ctx := srv.Context()
 
-	return &emptypb.Empty{}, nil
-}
+	for {
 
-func (r *RTSP) Message(ctx context.Context, cr *pb.Request) (*pb.Response, error) {
-	r.logger.Debugf("Got message request: %+v", cr)
+		// exit if context is done
+		// or continue
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 
-	// read request
-	rr := bufio.NewReader(strings.NewReader(cr.Request))
+		// receive data from stream
+		stream, err := srv.Recv()
+		if err == io.EOF {
+			// return will close stream from server side
+			r.logger.Info("found EOF, exiting")
+			return nil
+		}
+		if err != nil {
+			r.logger.Errorf("received error %v", err)
+			continue
+		}
+		r.logger.Debugf("Got message request: %+v", stream)
 
-	req, err := readRequest(rr)
-	if err != nil {
-		r.logger.Error("Could not read request: %s", err)
-		return nil, err
+		// read request if data
+		switch stream.Event {
+		case pb.Event_DATA:
+			rr := bufio.NewReader(strings.NewReader(stream.Data))
+			req, err := readRequest(rr)
+			if err != nil {
+				r.logger.Errorf("could not read request: %s", err)
+				return err
+			}
+
+			resp := &pb.Message{
+				Data: fmt.Sprintf("s", r.handleRequest(req)),
+			}
+
+			if err := srv.Send(resp); err != nil {
+				r.logger.Errorf("could not send response, error: %v", err)
+			}
+		default:
+		}
 	}
-
-	res := r.handleRequest(req)
-	return &pb.Response{
-		Response: fmt.Sprintf("s", res),
-	}, nil
 }
