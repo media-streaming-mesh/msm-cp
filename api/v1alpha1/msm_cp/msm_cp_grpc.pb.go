@@ -39,8 +39,8 @@ func (c *msmControlPlaneClient) Connect(ctx context.Context, opts ...grpc.CallOp
 }
 
 type MsmControlPlane_ConnectClient interface {
-	Send(*Request) error
-	Recv() (*Response, error)
+	Send(*Message) error
+	Recv() (*Message, error)
 	grpc.ClientStream
 }
 
@@ -48,12 +48,12 @@ type msmControlPlaneConnectClient struct {
 	grpc.ClientStream
 }
 
-func (x *msmControlPlaneConnectClient) Send(m *Request) error {
+func (x *msmControlPlaneConnectClient) Send(m *Message) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *msmControlPlaneConnectClient) Recv() (*Response, error) {
-	m := new(Response)
+func (x *msmControlPlaneConnectClient) Recv() (*Message, error) {
+	m := new(Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func _MsmControlPlane_Connect_Handler(srv interface{}, stream grpc.ServerStream)
 }
 
 type MsmControlPlane_ConnectServer interface {
-	Send(*Response) error
-	Recv() (*Request, error)
+	Send(*Message) error
+	Recv() (*Message, error)
 	grpc.ServerStream
 }
 
@@ -100,12 +100,12 @@ type msmControlPlaneConnectServer struct {
 	grpc.ServerStream
 }
 
-func (x *msmControlPlaneConnectServer) Send(m *Response) error {
+func (x *msmControlPlaneConnectServer) Send(m *Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *msmControlPlaneConnectServer) Recv() (*Request, error) {
-	m := new(Request)
+func (x *msmControlPlaneConnectServer) Recv() (*Message, error) {
+	m := new(Message)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

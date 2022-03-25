@@ -22,26 +22,17 @@ option go_package = "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp;
 
 enum Event {
 	ADD = 0;
-	UPDATE = 1;
-	DELETE = 2;
-	RTSP_DATA = 3;
+	DELETE = 1;
+	DATA = 2;
 }
 
 service MsmControlPlane {
-	rpc Connect (stream Request) returns (stream Response);
+	rpc Connect (stream Message) returns (stream Message);
 }
 
 message Message {
-	string local = 1;
-	string remote = 2;
-	string data = 3;
-}
-
-message Request {
 	Event event = 1;
-	Message message = 2;
-}
-
-message Response {
-	string data = 1;
+	string local = 2;
+	string remote = 3;
+	string data = 4;
 }

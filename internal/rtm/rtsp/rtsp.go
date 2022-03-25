@@ -95,15 +95,15 @@ func (r *RTSP) Connect(srv pb.MsmControlPlane_ConnectServer) error {
 
 		// read request if data
 		switch stream.Event {
-		case pb.Event_RTSP_DATA:
-			rr := bufio.NewReader(strings.NewReader(stream.Message.Data))
+		case pb.Event_DATA:
+			rr := bufio.NewReader(strings.NewReader(stream.Data))
 			req, err := readRequest(rr)
 			if err != nil {
 				r.logger.Errorf("could not read request: %s", err)
 				return err
 			}
 
-			resp := &pb.Response{
+			resp := &pb.Message{
 				Data: fmt.Sprintf("s", r.handleRequest(req)),
 			}
 
