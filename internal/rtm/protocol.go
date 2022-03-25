@@ -18,31 +18,14 @@ package rtm
 
 import (
 	"context"
-
-	"google.golang.org/protobuf/types/known/emptypb"
-
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
-	"github.com/sirupsen/logrus"
 )
 
 // API provides external access to
 type API interface {
-	ClientConnect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, error)
-	ClientRequest(ctx context.Context, cr *pb.Request) (*pb.Response, error)
-	ServerConnect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, error)
-	ServerRequest(ctx context.Context, cr *pb.Request) (*pb.Response, error)
-}
-
-func (p *Protocol) ServerConnect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (p *Protocol) ServerRequest(ctx context.Context, cr *pb.Request) (*pb.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	Connect(srv pb.MsmControlPlane_ConnectServer) error
 }
 
 // Protocol holds the rtm protocol specific data structures
@@ -52,55 +35,31 @@ type Protocol struct {
 	rtsp *rtsp.RTSP
 }
 
-// Option configures Run
-type Option func(*options)
-
-// options configure the transport
-// options are passed through run and normally are set with flags
-// or a configuration file before the start of the MSM control plane
-type options struct {
-	// Context is the context to use for the transport.
-	Context context.Context
-
-	// Logger is the logger to use.
-	Logger *logrus.Logger
-}
-
 func New(cfg *config.Cfg) *Protocol {
+	ctx := context.Background()
+
+	rtspOpts := []rtsp.Option{
+		rtsp.UseContext(ctx),
+		rtsp.UseLogger(cfg.Logger),
+	}
+
 	return &Protocol{
 		cfg:  cfg,
-		rtsp: rtsp.NewRTSP(),
+		rtsp: rtsp.NewRTSP(rtspOpts...),
 	}
 }
 
-func (p *Protocol) ClientConnect(ctx context.Context, cc *pb.Endpoints) (*emptypb.Empty, error) {
+func (p *Protocol) Connect(srv pb.MsmControlPlane_ConnectServer) error {
 	proto := p.cfg.Protocol
-	res := &emptypb.Empty{}
 
 	switch proto {
 	case "rtsp":
 		var err error
-		res, err = p.rtsp.Connect(ctx, cc)
+		err = p.rtsp.Connect(srv)
 		if err != nil {
-			return res, err
+			return err
 		}
 	}
 
-	return res, nil
-}
-
-func (p *Protocol) ClientRequest(ctx context.Context, cr *pb.Request) (*pb.Response, error) {
-	proto := p.cfg.Protocol
-	res := &pb.Response{}
-
-	switch proto {
-	case "rtsp":
-		var err error
-		res, err = p.rtsp.Message(ctx, cr)
-		if err != nil {
-			return res, err
-		}
-	}
-
-	return res, nil
+	return nil
 }
