@@ -41,7 +41,7 @@ func main() {
 	defer conn.Close()
 
 	client := pb.NewMsmControlPlaneClient(conn)
-	stream, err := client.Connect(context.Background())
+	stream, err := client.Send(context.Background())
 	if err != nil {
 		log.Fatalf("openn stream error %v", err)
 	}
@@ -55,13 +55,11 @@ func main() {
 
 			rnd := int32(rand.Intn(i))
 			str := "OPTIONS rtsp://localhost:8554/foo RTSP/1.0\\r\\nCSeq: 2\\r\\nUser-Agent: LibVLC/3.0.16 (LIVE555 Streaming Media v2016.11.28)"
-			req := pb.Request{
-				Event: pb.Event_RTSP_DATA,
-				Message: &pb.Message{
-					Local:  "172.16.1.100",
-					Remote: "11.213.42.1",
-					Data:   fmt.Sprintf("%s%d", str, rnd),
-				},
+			req := pb.Message{
+				Event:  pb.Event_DATA,
+				Local:  "172.16.1.100",
+				Remote: "11.213.42.1",
+				Data:   fmt.Sprintf("%s%d", str, rnd),
 			}
 			if err := stream.Send(&req); err != nil {
 				log.Fatalf("can not send %v", err)

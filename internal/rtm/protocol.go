@@ -25,7 +25,7 @@ import (
 
 // API provides external access to
 type API interface {
-	Connect(srv pb.MsmControlPlane_ConnectServer) error
+	Send(srv pb.MsmControlPlane_SendServer) error
 }
 
 // Protocol holds the rtm protocol specific data structures
@@ -49,13 +49,13 @@ func New(cfg *config.Cfg) *Protocol {
 	}
 }
 
-func (p *Protocol) Connect(srv pb.MsmControlPlane_ConnectServer) error {
+func (p *Protocol) Send(srv pb.MsmControlPlane_SendServer) error {
 	proto := p.cfg.Protocol
 
 	switch proto {
 	case "rtsp":
 		var err error
-		err = p.rtsp.Connect(srv)
+		err = p.rtsp.Send(srv)
 		if err != nil {
 			return err
 		}

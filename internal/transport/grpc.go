@@ -66,7 +66,7 @@ func (s *grpcServer) start() error {
 func (s *grpcServer) close() {
 	log := s.opts.Logger
 
-	// Graceful in a goroutine so we can timeout
+	// Graceful in a goroutine so we can time out
 	graceCh := make(chan struct{})
 	go func() {
 		defer close(graceCh)
