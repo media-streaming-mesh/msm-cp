@@ -95,25 +95,25 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 		// read request if data
 		switch stream.Event {
 		case pb.Event_ADD:
-			r.logger.Debugf("Got message request: %+v", stream)
+			r.logger.Debugf("Got ADD message request: %+v", stream)
 
-			resp := &pb.Message{
-				Data: fmt.Sprintf("%s", "added"),
-			}
-
-			if err := srv.Send(resp); err != nil {
-				r.logger.Errorf("could not send response, error: %v", err)
-			}
+			//resp := &pb.Message{
+			//	Data: fmt.Sprintf("%s", "added"),
+			//}
+			//
+			//if err := srv.Send(resp); err != nil {
+			//	r.logger.Errorf("could not send response, error: %v", err)
+			//}
 		case pb.Event_DELETE:
-			r.logger.Debugf("Got message request: %+v", stream)
-
-			resp := &pb.Message{
-				Data: fmt.Sprintf("%s", "deleted"),
-			}
-
-			if err := srv.Send(resp); err != nil {
-				r.logger.Errorf("could not send response, error: %v", err)
-			}
+			r.logger.Debugf("Got DELETE message request: %+v", stream)
+			//
+			//resp := &pb.Message{
+			//	Data: fmt.Sprintf("%s", "deleted"),
+			//}
+			//
+			//if err := srv.Send(resp); err != nil {
+			//	r.logger.Errorf("could not send response, error: %v", err)
+			//}
 		case pb.Event_DATA:
 			r.logger.Debugf("Got message request: %+v", stream)
 
