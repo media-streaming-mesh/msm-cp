@@ -95,27 +95,13 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 		// read request if data
 		switch stream.Event {
 		case pb.Event_ADD:
-			r.logger.Debugf("Got ADD message request: %+v", stream)
+			r.logger.Debugf("Received ADD message request: %+v", stream)
 
-			//resp := &pb.Message{
-			//	Data: fmt.Sprintf("%s", "added"),
-			//}
-			//
-			//if err := srv.Send(resp); err != nil {
-			//	r.logger.Errorf("could not send response, error: %v", err)
-			//}
 		case pb.Event_DELETE:
-			r.logger.Debugf("Got DELETE message request: %+v", stream)
-			//
-			//resp := &pb.Message{
-			//	Data: fmt.Sprintf("%s", "deleted"),
-			//}
-			//
-			//if err := srv.Send(resp); err != nil {
-			//	r.logger.Errorf("could not send response, error: %v", err)
-			//}
+			r.logger.Debugf("Received DELETE message request: %+v", stream)
+
 		case pb.Event_DATA:
-			r.logger.Debugf("Got message request: %+v", stream)
+			r.logger.Debugf("Received DATA message request: %+v", stream)
 
 			rr := bufio.NewReader(strings.NewReader(stream.Data))
 			req, err := readRequest(rr)
@@ -125,8 +111,13 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 			}
 
 			resp := &pb.Message{
-				Data: fmt.Sprintf("%s", r.handleRequest(req)),
+				Event:  stream.Event,
+				Local:  stream.Local,
+				Remote: stream.Remote,
+				Data:   fmt.Sprintf("%s", r.handleRequest(req)),
 			}
+
+			r.logger.Debugf("DATA Response: %+v", resp)
 
 			if err := srv.Send(resp); err != nil {
 				r.logger.Errorf("could not send response, error: %v", err)

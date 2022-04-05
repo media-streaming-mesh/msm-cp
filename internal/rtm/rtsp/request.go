@@ -106,6 +106,7 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 				}, ", ")},
 			},
 		}
+
 		r.logger.Debugf("response: %+v", res)
 		return res
 
