@@ -66,7 +66,7 @@ func NewRTSP(opts ...Option) *RTSP {
 	}
 }
 
-func (r *RTSP) Connect(srv pb.MsmControlPlane_ConnectServer) error {
+func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 	r.logger.Debugf("start new server")
 	ctx := srv.Context()
 
@@ -91,11 +91,32 @@ func (r *RTSP) Connect(srv pb.MsmControlPlane_ConnectServer) error {
 			r.logger.Errorf("received error %v", err)
 			continue
 		}
-		r.logger.Debugf("Got message request: %+v", stream)
 
 		// read request if data
 		switch stream.Event {
+		case pb.Event_ADD:
+			r.logger.Debugf("Got message request: %+v", stream)
+
+			resp := &pb.Message{
+				Data: fmt.Sprintf("%s", "added"),
+			}
+
+			if err := srv.Send(resp); err != nil {
+				r.logger.Errorf("could not send response, error: %v", err)
+			}
+		case pb.Event_DELETE:
+			r.logger.Debugf("Got message request: %+v", stream)
+
+			resp := &pb.Message{
+				Data: fmt.Sprintf("%s", "deleted"),
+			}
+
+			if err := srv.Send(resp); err != nil {
+				r.logger.Errorf("could not send response, error: %v", err)
+			}
 		case pb.Event_DATA:
+			r.logger.Debugf("Got message request: %+v", stream)
+
 			rr := bufio.NewReader(strings.NewReader(stream.Data))
 			req, err := readRequest(rr)
 			if err != nil {
@@ -104,7 +125,7 @@ func (r *RTSP) Connect(srv pb.MsmControlPlane_ConnectServer) error {
 			}
 
 			resp := &pb.Message{
-				Data: fmt.Sprintf("s", r.handleRequest(req)),
+				Data: fmt.Sprintf("%s", r.handleRequest(req)),
 			}
 
 			if err := srv.Send(resp); err != nil {

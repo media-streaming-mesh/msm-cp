@@ -86,13 +86,14 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 		return ret
 	}()
 
-	r.logger.Debugf("This is the path: %s", path)
+	r.logger.Debugf("path: %s", path)
 
 	switch req.Method {
 	case OPTIONS:
 		// do not check state, since OPTIONS can be requested
 		// in any state
-		return &Response{
+
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq": []string{cseq[0]},
@@ -105,10 +106,12 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 				}, ", ")},
 			},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	case DESCRIBE:
 
-		return &Response{
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq":         []string{cseq[0]},
@@ -118,6 +121,8 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 			// todo - content func
 			Content: []byte{},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	case SETUP:
 		tsRaw, ok := req.Header["Transport"]
@@ -130,7 +135,7 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 			return r.writeResError(req, StatusBadRequest, fmt.Errorf("multicast is not supported"))
 		}
 
-		return &Response{
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq": []string{cseq[0]},
@@ -143,35 +148,43 @@ func (r *RTSP) handleRequest(req *Request) *Response {
 				"Session": []string{"12345678"},
 			},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	case PLAY:
 
-		return &Response{
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq":    []string{cseq[0]},
 				"Session": []string{"12345678"},
 			},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	case PAUSE:
 
-		return &Response{
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq":    []string{cseq[0]},
 				"Session": []string{"12345678"},
 			},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	case TEARDOWN:
 
-		return &Response{
+		res := &Response{
 			StatusCode: StatusOK,
 			Header: Header{
 				"CSeq": []string{cseq[0]},
 			},
 		}
+		r.logger.Debugf("response: %+v", res)
+		return res
 
 	default:
 		r.writeResError(req, StatusBadRequest, fmt.Errorf("unhandled method '%s'", req.Method))

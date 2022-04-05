@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MsmControlPlaneClient interface {
-	Connect(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_ConnectClient, error)
+	Send(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_SendClient, error)
 }
 
 type msmControlPlaneClient struct {
@@ -29,30 +29,30 @@ func NewMsmControlPlaneClient(cc grpc.ClientConnInterface) MsmControlPlaneClient
 	return &msmControlPlaneClient{cc}
 }
 
-func (c *msmControlPlaneClient) Connect(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_ConnectClient, error) {
-	stream, err := c.cc.NewStream(ctx, &MsmControlPlane_ServiceDesc.Streams[0], "/msm_cp.MsmControlPlane/Connect", opts...)
+func (c *msmControlPlaneClient) Send(ctx context.Context, opts ...grpc.CallOption) (MsmControlPlane_SendClient, error) {
+	stream, err := c.cc.NewStream(ctx, &MsmControlPlane_ServiceDesc.Streams[0], "/msm_cp.MsmControlPlane/Send", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &msmControlPlaneConnectClient{stream}
+	x := &msmControlPlaneSendClient{stream}
 	return x, nil
 }
 
-type MsmControlPlane_ConnectClient interface {
+type MsmControlPlane_SendClient interface {
 	Send(*Message) error
 	Recv() (*Message, error)
 	grpc.ClientStream
 }
 
-type msmControlPlaneConnectClient struct {
+type msmControlPlaneSendClient struct {
 	grpc.ClientStream
 }
 
-func (x *msmControlPlaneConnectClient) Send(m *Message) error {
+func (x *msmControlPlaneSendClient) Send(m *Message) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *msmControlPlaneConnectClient) Recv() (*Message, error) {
+func (x *msmControlPlaneSendClient) Recv() (*Message, error) {
 	m := new(Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -64,15 +64,15 @@ func (x *msmControlPlaneConnectClient) Recv() (*Message, error) {
 // All implementations should embed UnimplementedMsmControlPlaneServer
 // for forward compatibility
 type MsmControlPlaneServer interface {
-	Connect(MsmControlPlane_ConnectServer) error
+	Send(MsmControlPlane_SendServer) error
 }
 
 // UnimplementedMsmControlPlaneServer should be embedded to have forward compatible implementations.
 type UnimplementedMsmControlPlaneServer struct {
 }
 
-func (UnimplementedMsmControlPlaneServer) Connect(MsmControlPlane_ConnectServer) error {
-	return status.Errorf(codes.Unimplemented, "method Connect not implemented")
+func (UnimplementedMsmControlPlaneServer) Send(MsmControlPlane_SendServer) error {
+	return status.Errorf(codes.Unimplemented, "method Send not implemented")
 }
 
 // UnsafeMsmControlPlaneServer may be embedded to opt out of forward compatibility for this service.
@@ -86,25 +86,25 @@ func RegisterMsmControlPlaneServer(s grpc.ServiceRegistrar, srv MsmControlPlaneS
 	s.RegisterService(&MsmControlPlane_ServiceDesc, srv)
 }
 
-func _MsmControlPlane_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MsmControlPlaneServer).Connect(&msmControlPlaneConnectServer{stream})
+func _MsmControlPlane_Send_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MsmControlPlaneServer).Send(&msmControlPlaneSendServer{stream})
 }
 
-type MsmControlPlane_ConnectServer interface {
+type MsmControlPlane_SendServer interface {
 	Send(*Message) error
 	Recv() (*Message, error)
 	grpc.ServerStream
 }
 
-type msmControlPlaneConnectServer struct {
+type msmControlPlaneSendServer struct {
 	grpc.ServerStream
 }
 
-func (x *msmControlPlaneConnectServer) Send(m *Message) error {
+func (x *msmControlPlaneSendServer) Send(m *Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *msmControlPlaneConnectServer) Recv() (*Message, error) {
+func (x *msmControlPlaneSendServer) Recv() (*Message, error) {
 	m := new(Message)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -121,8 +121,8 @@ var MsmControlPlane_ServiceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Connect",
-			Handler:       _MsmControlPlane_Connect_Handler,
+			StreamName:    "Send",
+			Handler:       _MsmControlPlane_Send_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
