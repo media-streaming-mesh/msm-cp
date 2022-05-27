@@ -18,6 +18,7 @@ package rtm
 
 import (
 	"context"
+	"errors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
@@ -41,6 +42,8 @@ func New(cfg *config.Cfg) *Protocol {
 	rtspOpts := []rtsp.Option{
 		rtsp.UseContext(ctx),
 		rtsp.UseLogger(cfg.Logger),
+		rtsp.UseRemote(cfg.Remote),
+		rtsp.UseMethods(cfg.SupportedMethods),
 	}
 
 	return &Protocol{
@@ -54,12 +57,8 @@ func (p *Protocol) Send(srv pb.MsmControlPlane_SendServer) error {
 
 	switch proto {
 	case "rtsp":
-		var err error
-		err = p.rtsp.Send(srv)
-		if err != nil {
-			return err
-		}
+		return p.rtsp.Send(srv)
+	default:
+		return errors.New("failed to get rtm protocol type from config")
 	}
-
-	return nil
 }

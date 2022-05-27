@@ -17,7 +17,7 @@ func InitApp() (*App, error) {
 	protocol := rtm.New(cfg)
 	app := &App{
 		cfg:     cfg,
-		rpcImpl: protocol,
+		rtmImpl: protocol,
 	}
 	return app, nil
 }

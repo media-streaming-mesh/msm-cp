@@ -33,7 +33,7 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	rpcImpl rtm.API
+	rtmImpl rtm.API
 }
 
 // Start, starts the MSM Control Plane application.
@@ -55,8 +55,7 @@ func (a *App) Start() error {
 	defer cancel()
 
 	// Listen on a port given from initial config
-	grpcPort := fmt.Sprintf(":%s", a.cfg.Grpc.Port)
-	logger.Debug("starting listener", "addr")
+	grpcPort := fmt.Sprintf("0.0.0.0:%s", a.cfg.Grpc.Port)
 	ln, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		return err
@@ -66,7 +65,7 @@ func (a *App) Start() error {
 		transport.UseContext(ctx),
 		transport.UseLogger(logger),
 		transport.UseListener(ln),
-		transport.UseGrpcImpl(a.rpcImpl),
+		transport.UseGrpcImpl(a.rtmImpl),
 	}
 
 	var startTransportErr = make(chan error)
@@ -85,6 +84,6 @@ func (a *App) Start() error {
 	case <-ctx.Done():
 		return nil
 	}
-
+	fmt.Println("Exit")
 	return nil
 }

@@ -19,17 +19,19 @@ package config
 
 import (
 	"flag"
-
+	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
 )
 
 // Config holds the configuration data for the MSM control plane
 // application
 type Cfg struct {
-	Dataplane string
-	Protocol  string
-	Logger    *logrus.Logger
-	Grpc      *grpcOpts
+	Dataplane        string
+	Protocol         string
+	Remote           string
+	Logger           *logrus.Logger
+	Grpc             *grpcOpts
+	SupportedMethods []base.Method
 }
 
 type grpcOpts struct {
@@ -46,6 +48,8 @@ func New() *Cfg {
 	flag.StringVar(&grpcOpt.Port, "grpcPort", "9000", "port to listen for GRPC on")
 	flag.StringVar(&cf.Protocol, "protocol", "rtsp", "control plane protocol mode (rtsp, rist)")
 	logLevel := flag.Int("loglevel", int(logrus.InfoLevel), "Log level")
+	flag.StringVar(&cf.Remote, "remote", "192.168.82.47", "remote ip addr")
+
 	flag.Parse()
 
 	cf.Logger = logrus.New()
@@ -55,6 +59,7 @@ func New() *Cfg {
 		Dataplane: cf.Dataplane,
 		Protocol:  cf.Protocol,
 		Logger:    cf.Logger,
+		Remote:    cf.Remote,
 		Grpc: &grpcOpts{
 			Port: grpcOpt.Port,
 		},
