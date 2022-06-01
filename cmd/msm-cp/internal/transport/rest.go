@@ -14,26 +14,17 @@
  * limitations under the License.
  */
 
-syntax = "proto3";
+package transport
 
-package msm_cp;
+import (
+	"net/http"
 
-option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_cp;msm_cp";
+	"github.com/sirupsen/logrus"
+)
 
-enum Event {
-	REGISTER = 0;
-	ADD = 1;
-	DELETE = 2;
-	DATA = 3;
-}
+type httpServer struct {
+	opts *options
+	log  logrus.Logger
 
-service MsmControlPlane {
-	rpc Send (stream Message) returns (stream Message);
-}
-
-message Message {
-	Event event = 1;
-	string local = 2;
-	string remote = 3;
-	string data = 4;
+	server *http.Server
 }

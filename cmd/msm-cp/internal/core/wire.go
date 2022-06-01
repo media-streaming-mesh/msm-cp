@@ -1,3 +1,6 @@
+//go:build wireinject
+// +build wireinject
+
 /*
  * Copyright (c) 2022 Cisco and/or its affiliates.
  *
@@ -14,26 +17,20 @@
  * limitations under the License.
  */
 
-syntax = "proto3";
+package core
 
-package msm_cp;
+import (
+	"github.com/google/wire"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
+)
 
-option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_cp;msm_cp";
+func InitApp() (*App, error) {
+	wire.Build(
+		config.Provider,
+		rtm.Provider,
+		wire.Struct(new(App), "*"),
+	)
 
-enum Event {
-	REGISTER = 0;
-	ADD = 1;
-	DELETE = 2;
-	DATA = 3;
-}
-
-service MsmControlPlane {
-	rpc Send (stream Message) returns (stream Message);
-}
-
-message Message {
-	Event event = 1;
-	string local = 2;
-	string remote = 3;
-	string data = 4;
+	return &App{}, nil
 }

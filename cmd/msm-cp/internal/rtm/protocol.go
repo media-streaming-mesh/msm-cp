@@ -19,7 +19,6 @@ package rtm
 import (
 	"context"
 	"errors"
-
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
@@ -43,6 +42,7 @@ func New(cfg *config.Cfg) *Protocol {
 	rtspOpts := []rtsp.Option{
 		rtsp.UseContext(ctx),
 		rtsp.UseLogger(cfg.Logger),
+		rtsp.UseRemote(cfg.Remote),
 		rtsp.UseMethods(cfg.SupportedMethods),
 	}
 

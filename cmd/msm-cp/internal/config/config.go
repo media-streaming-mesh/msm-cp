@@ -19,7 +19,6 @@ package config
 
 import (
 	"flag"
-
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
 )
@@ -49,6 +48,7 @@ func New() *Cfg {
 	flag.StringVar(&grpcOpt.Port, "grpcPort", "9000", "port to listen for GRPC on")
 	flag.StringVar(&cf.Protocol, "protocol", "rtsp", "control plane protocol mode (rtsp, rist)")
 	logLevel := flag.Int("loglevel", int(logrus.InfoLevel), "Log level")
+	flag.StringVar(&cf.Remote, "remote", "192.168.82.47", "remote ip addr")
 
 	flag.Parse()
 

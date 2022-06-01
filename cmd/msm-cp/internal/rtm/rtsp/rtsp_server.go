@@ -21,23 +21,20 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/aler9/gortsplib/pkg/base"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/sirupsen/logrus"
 	"io"
 	"strings"
 	"sync"
-
-	"github.com/aler9/gortsplib/pkg/base"
-	"github.com/sirupsen/logrus"
-
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 )
 
 type RTSP struct {
-	urlHandler *msm_url.UrlHandler
-	logger     *logrus.Logger
-	methods    []base.Method
-	stubConn   *sync.Map
-	rtspConn   *sync.Map
+	remote   string
+	logger   *logrus.Logger
+	methods  []base.Method
+	stubConn *sync.Map
+	rtspConn *sync.Map
 }
 
 // Option configures NewRTSP
@@ -53,12 +50,22 @@ type options struct {
 
 	// RTSP supported Methods
 	SupportedMethods []base.Method
+
+	// Remote is the server side stub address for testing
+	Remote string
 }
 
 // UseContext sets the context for the server
 func UseContext(ctx context.Context) Option {
 	return func(opts *options) {
 		opts.Context = ctx
+	}
+}
+
+// UseContext sets the context for the server
+func UseRemote(r string) Option {
+	return func(opts *options) {
+		opts.Remote = r
 	}
 }
 
@@ -81,15 +88,13 @@ func NewRTSP(opts ...Option) *RTSP {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	uHandler := &msm_url.UrlHandler{}
-	uHandler.InitializeUrlHandler()
 
 	return &RTSP{
-		urlHandler: uHandler,
-		logger:     cfg.Logger,
-		methods:    cfg.SupportedMethods,
-		stubConn:   new(sync.Map),
-		rtspConn:   new(sync.Map),
+		logger:   cfg.Logger,
+		remote:   cfg.Remote,
+		methods:  cfg.SupportedMethods,
+		stubConn: new(sync.Map),
+		rtspConn: new(sync.Map),
 	}
 
 }

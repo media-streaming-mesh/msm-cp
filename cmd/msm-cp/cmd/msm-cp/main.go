@@ -14,26 +14,22 @@
  * limitations under the License.
  */
 
-syntax = "proto3";
+package main
 
-package msm_cp;
+import (
+	"github.com/media-streaming-mesh/msm-cp/internal/core"
+)
 
-option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_cp;msm_cp";
+func main() {
 
-enum Event {
-	REGISTER = 0;
-	ADD = 1;
-	DELETE = 2;
-	DATA = 3;
+	app, err := core.InitApp()
+	must(err)
+	must(app.Start())
+
 }
 
-service MsmControlPlane {
-	rpc Send (stream Message) returns (stream Message);
-}
-
-message Message {
-	Event event = 1;
-	string local = 2;
-	string remote = 3;
-	string data = 4;
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
 }

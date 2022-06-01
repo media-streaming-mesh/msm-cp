@@ -20,13 +20,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
-	"net"
-	"strings"
-
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"google.golang.org/grpc/peer"
+	"log"
+	"net"
+	"strings"
 )
 
 // called when a connection is opened.
@@ -103,6 +102,7 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 	}
 
 	// find intersection of options supported
+	// wait for channel from other goroutine?
 	r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
 	return res, nil
 
@@ -156,7 +156,8 @@ func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response, error) {
 
 	// 1. Find the backend to connect to and save it to the rtsp connection
-	ep, err := r.getEndpointFromPath(req.URL)
+	path, port, _ := net.SplitHostPort(req.URL.Host)
+	ep, err := r.getEndpointFromPath(path)
 	if err != nil {
 		r.logger.Errorf("could not find endpoint")
 		// res := &base.Response { bad request or something}
@@ -167,10 +168,9 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	srv, ok := r.stubConn.Load(ep)
 	if !ok {
 		r.logger.Errorf("could not find stub connection for endpoint")
-		return nil, errors.New("not found")
+		return nil, errors.New("shit1")
 	}
 
-	_, port, _ := net.SplitHostPort(req.URL.Host)
 	addMsg := &pb.Message{
 		Event:  pb.Event_ADD,
 		Remote: fmt.Sprintf("%s:%s", ep, port),
@@ -230,22 +230,11 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	return res, nil
 }
 
-func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
-	urls := r.urlHandler.GetInternalURLs(p.String())
+func (r *RTSP) getEndpointFromPath(p string) (string, error) {
+	r.logger.Debugf("K8s API Client response: %s", p)
 
-	r.logger.Debugf("endpoints to connect: %v", urls)
-
-	ep, err := base.ParseURL(urls[0])
-	if err != nil {
-		return "", errors.New("could not parse endpoint")
-	}
-	host, _, err := net.SplitHostPort(ep.Host)
-	if err != nil {
-		return "", errors.New("could not parse host:port")
-	}
-	r.logger.Debugf("endpoint to connect: %s", ep)
-
-	return host, nil
+	ep := r.remote
+	return ep, nil
 }
 
 func getRemoteIPv4Address(url string) string {
