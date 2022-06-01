@@ -31,7 +31,7 @@ spec:
       containers:
         - name: msm-controller
           image: ciscolabs/msm-controller:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           ports:
             - name: grpc
               protocol: TCP
