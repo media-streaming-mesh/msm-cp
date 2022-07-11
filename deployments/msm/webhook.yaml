@@ -32,8 +32,6 @@ spec:
         - key: node-role.kubernetes.io/master
           operator: Exists
           effect: NoSchedule
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
       serviceAccount: msm-admission-webhook-sa
       containers:
         - name: msm-admission-webhook

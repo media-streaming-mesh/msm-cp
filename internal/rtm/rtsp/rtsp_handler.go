@@ -69,6 +69,24 @@ func (r *RTSP) OnConnOpen(msg *pb.Message) {
 	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
 }
 
+// called when a connection is close.
+func (r *RTSP) OnConnClose(msg *pb.Message) {
+
+	// find RTSP connection and delete it
+	key := getRTSPConnectionKey(msg.Local, msg.Remote)
+	r.rtspConn.Delete(key)
+
+	// read from channel to unblock write
+	stubAddr := getRemoteIPv4Address(msg.Remote)
+	srv, ok := r.stubConn.Load(stubAddr)
+	if !ok {
+		r.logger.Errorf("stub connection was not found!")
+		return
+	}
+	<-srv.(*StubConnection).addCh
+	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
+}
+
 // called when a session is opened.
 func (r *RTSP) OnSessionOpen() {
 	// save session
