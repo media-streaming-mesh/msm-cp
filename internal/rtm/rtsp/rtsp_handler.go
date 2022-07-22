@@ -20,13 +20,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
-	"net"
-	"strings"
-
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"google.golang.org/grpc/peer"
+	"log"
+	"net"
+	"strings"
 )
 
 // called when a connection is opened.
@@ -64,7 +63,7 @@ func (r *RTSP) OnConnOpen(msg *pb.Message) {
 		r.logger.Errorf("stub connection was not found!")
 		return
 	}
-
+	srv.(*StubConnection).data = *msg
 	srv.(*StubConnection).addCh <- msg
 	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
 }
@@ -102,17 +101,7 @@ func (r *RTSP) OnSessionClose() {
 func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	var methods []string
-	methods = append(methods, string(base.Describe))
-	methods = append(methods, string(base.Announce))
-	methods = append(methods, string(base.Setup))
-	methods = append(methods, string(base.Play))
-	methods = append(methods, string(base.Record))
-	methods = append(methods, string(base.Pause))
-	methods = append(methods, string(base.Teardown))
-	methods = append(methods, string(base.SetParameter))
-
-	//
+	// call k8sAPIHelper to connect to server pod
 	res, err := r.connectToRemote(req, s)
 	if err != nil {
 		// handle error
@@ -120,7 +109,7 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 		return nil, err
 	}
 
-	// find intersection of options supported
+	// logs options supported
 	r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
 	return res, nil
 
@@ -173,7 +162,7 @@ func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 
 func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response, error) {
 
-	// 1. Find the backend to connect to and save it to the rtsp connection
+	// 1. Find the remote endpoint to connect
 	ep, err := r.getEndpointFromPath(req.URL)
 	if err != nil {
 		r.logger.Errorf("could not find endpoint")
@@ -188,22 +177,33 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		return nil, errors.New("not found")
 	}
 
-	_, port, _ := net.SplitHostPort(req.URL.Host)
-	addMsg := &pb.Message{
-		Event:  pb.Event_ADD,
-		Remote: fmt.Sprintf("%s:%s", ep, port),
+	// 3. Check if remote endpoint open RTSP connection
+	if !r.isConnectionOpen(ep) {
+		r.logger.Debugf("Send ADD event to open remote RTSP connection")
+		// Send ADD event to server pod
+		_, port, _ := net.SplitHostPort(req.URL.Host)
+		addMsg := &pb.Message{
+			Event:  pb.Event_ADD,
+			Remote: fmt.Sprintf("%s:%s", ep, port),
+		}
+		srv.(*StubConnection).conn.Send(addMsg)
+
+		// Waiting for server pod response with local/remote ports
+		// CP will receive Event_ADD and send value to addCh to unblock channel
+		<-srv.(*StubConnection).addCh
+	} else {
+		r.logger.Debugf("Remote endpoint RTSP connection open")
 	}
-	srv.(*StubConnection).conn.Send(addMsg)
 
-	addCh := <-srv.(*StubConnection).addCh
-
+	// 5. Forward OPTIONS command to sever pod
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
+	messageData := srv.(*StubConnection).data
 
 	optionsMsg := &pb.Message{
 		Event:  pb.Event_DATA,
-		Local:  addCh.Local,
-		Remote: addCh.Remote,
+		Local:  messageData.Local,
+		Remote: messageData.Remote,
 		Data:   fmt.Sprintf("%s", data),
 	}
 
@@ -211,8 +211,8 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	key := getRTSPConnectionKey(s.Local, s.Remote)
 	rc, ok := r.rtspConn.Load(key)
 	rc.(*RTSPConnection).targetAddr = ep
-	rc.(*RTSPConnection).targetLocal = addCh.Local
-	rc.(*RTSPConnection).targetRemote = addCh.Remote
+	rc.(*RTSPConnection).targetLocal = messageData.Local
+	rc.(*RTSPConnection).targetRemote = messageData.Remote
 
 	srv.(*StubConnection).conn.Send(optionsMsg)
 
@@ -276,4 +276,19 @@ func getRemoteIPv4Address(url string) string {
 
 func getRTSPConnectionKey(s1, s2 string) string {
 	return fmt.Sprintf("%s%s", s1, s2)
+}
+
+func (r *RTSP) isConnectionOpen(ep string) bool {
+	r.logger.Debugf("Check RTSP connection for endpoint %s", ep)
+	check := false
+	r.rtspConn.Range(func(key, value interface{}) bool {
+		r.logger.Debugf("RTSP connection targetAddress %s", value.(*RTSPConnection).targetAddr)
+		r.logger.Debugf("RTSP connection localAddress %s", value.(*RTSPConnection).targetLocal)
+		r.logger.Debugf("RTSP connection remoteAddress %s", value.(*RTSPConnection).targetRemote)
+		if value.(*RTSPConnection).targetAddr == ep {
+			check = true
+		}
+		return true
+	})
+	return check
 }
