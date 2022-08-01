@@ -44,6 +44,7 @@ func Run(opts ...Option) error {
 	if err != nil {
 		return err
 	}
+	log.Infof("GRPC server created")
 
 	wg := sync.WaitGroup{}
 
@@ -65,6 +66,7 @@ func Run(opts ...Option) error {
 		log.Error("failed to run the GRPC server", "err", err)
 		return err
 	case <-cfg.Context.Done():
+		log.Infof("GRPC server done")
 		grpcServer.close()
 		return ctx.Err()
 	}

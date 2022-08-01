@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 	"google.golang.org/grpc/peer"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -65,6 +67,7 @@ func (r *RTSP) OnConnOpen(msg *pb.Message) {
 	}
 	srv.(*StubConnection).data = *msg
 	srv.(*StubConnection).addCh <- msg
+	r.logger.Infof("RTSP connection key %v", key)
 	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
 }
 
@@ -108,6 +111,11 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 		// res := &base.Response { bad request or something}
 		return nil, err
 	}
+	//Update remote RTSTConnection
+	sc, _ := r.getRemoteRTSPConnection(s)
+	sc.state = Options
+	sc.lastResponse = res
+	sc.lastError = err
 
 	// logs options supported
 	r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
@@ -119,8 +127,15 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
 
+	//Update remote RTSTConnection
+	sc, _ := r.getRemoteRTSPConnection(s)
+	sc.state = Describe
+	sc.lastResponse = res
+	sc.lastError = err
+
+	//Logs
+	r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
 	return res, err
 }
 
@@ -128,7 +143,7 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 func (r *RTSP) OnAnnounce(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[c->s] ANNOUNCE RESPONSE %+v", res)
+	r.logger.Debugf("[s->c] ANNOUNCE RESPONSE %+v", res)
 
 	return res, err
 }
@@ -136,10 +151,58 @@ func (r *RTSP) OnAnnounce(req *base.Request, s *pb.Message) (*base.Response, err
 // called after receiving a SETUP request.
 func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
-	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
 
-	return res, err
+	sc, error := r.getRemoteRTSPConnection(s)
+	if error != nil {
+		return nil, error
+	}
+
+	if sc.state != Setup {
+		r.logger.Debugf("RTSPConnection connection state not SETUP")
+
+		res, err := r.clientToServer(req, s)
+		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
+
+		//If stream contains both video and audio, wait for both stream finish setup
+		//  before setup RTPProxy
+		if strings.Contains(sc.lastResponse.String(), "trackID=1") {
+			r.logger.Debugf("RTSPConnection connection has both audio and video")
+		} else {
+			sc.state = Setup
+		}
+		sc.lastResponse = res
+		sc.lastError = err
+	}
+
+	if sc.state == Setup {
+		// 1. Find the remote endpoint
+		ep, err := r.getEndpointFromPath(req.URL)
+		if err != nil {
+			r.logger.Errorf("could not find endpoint")
+			return nil, err
+		}
+
+		// 2. Find remote ports
+		clientPorts := getClientPorts(sc.lastResponse.Header["Transport"])
+		serverPorts := getServerPorts(sc.lastResponse.Header["Transport"])
+
+		r.logger.Debugf("client ports %v", clientPorts)
+		r.logger.Debugf("server ports %v", serverPorts)
+
+		//TODO: create GRPC connection to server once
+		grpcClient, err := transport.SetupClient()
+		if err != nil {
+			r.logger.Debugf("Failed to connect to server, error %s\n", err)
+		}
+		dpGrpcClient := transport.Client{
+			r.logger,
+			grpcClient,
+		}
+		createStreamErr := dpGrpcClient.CreateStream(ep, serverPorts[0])
+		r.logger.Debugf("Create stream error %v", createStreamErr)
+	}
+
+	return sc.lastResponse, sc.lastError
 }
 
 // called after receiving a PLAY request.
@@ -179,7 +242,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 
 	// 3. Check if remote endpoint open RTSP connection
 	if !r.isConnectionOpen(ep) {
-		r.logger.Debugf("Send ADD event to open remote RTSP connection")
+		r.logger.Debugf("Send ADD event open RTSP connection for %v", ep)
 		// Send ADD event to server pod
 		_, port, _ := net.SplitHostPort(req.URL.Host)
 		addMsg := &pb.Message{
@@ -207,17 +270,19 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		Data:   fmt.Sprintf("%s", data),
 	}
 
-	// update target to given pod
+	// update target to client pod
 	key := getRTSPConnectionKey(s.Local, s.Remote)
 	rc, ok := r.rtspConn.Load(key)
+	rc.(*RTSPConnection).state = Options
 	rc.(*RTSPConnection).targetAddr = ep
 	rc.(*RTSPConnection).targetLocal = messageData.Local
 	rc.(*RTSPConnection).targetRemote = messageData.Remote
 
+	//Send options to server pod
 	srv.(*StubConnection).conn.Send(optionsMsg)
-
 	r.logger.Debugf("waiting on options response")
 	res := <-srv.(*StubConnection).dataCh
+
 	return res, nil
 }
 
@@ -237,6 +302,7 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
 
+	r.logger.Debugf("Sending data from client %v to server", stubAddr)
 	srv.(*StubConnection).conn.Send(&pb.Message{
 		Event:  pb.Event_DATA,
 		Local:  sc.(*RTSPConnection).targetLocal,
@@ -291,4 +357,63 @@ func (r *RTSP) isConnectionOpen(ep string) bool {
 		return true
 	})
 	return check
+}
+
+func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
+	// Client RTSPConnection
+	key := getRTSPConnectionKey(s.Local, s.Remote)
+	sc, ok := r.rtspConn.Load(key)
+	if !ok {
+		return nil, errors.New("Can't find client RTSP connection")
+	}
+
+	// Server RTSPConnection
+	s_key := getRTSPConnectionKey(sc.(*RTSPConnection).targetLocal, sc.(*RTSPConnection).targetRemote)
+	s_sc, s_ok := r.rtspConn.Load(s_key)
+	if !s_ok {
+		return nil, errors.New("Can't find server RTSP connection")
+	}
+	return s_sc.(*RTSPConnection), nil
+}
+
+func getClientPorts(value base.HeaderValue) []uint32 {
+	var ports []uint32
+	for _, transportValue := range value {
+		transportValues := strings.Split(transportValue, ";")
+		for _, transportL2Value := range transportValues {
+			if strings.Contains(transportL2Value, "client_port") {
+				transportL2Values := strings.Split(transportL2Value, "=")
+				for _, transportL3Value := range transportL2Values {
+					transportL3Values := strings.Split(transportL3Value, "-")
+					for _, transportL4Value := range transportL3Values {
+						if port, err := strconv.ParseUint(transportL4Value, 10, 32); err == nil {
+							ports = append(ports, uint32(port))
+						}
+					}
+				}
+			}
+		}
+	}
+	return ports
+}
+
+func getServerPorts(value base.HeaderValue) []uint32 {
+	var ports []uint32
+	for _, transportValue := range value {
+		transportValues := strings.Split(transportValue, ";")
+		for _, transportL2Value := range transportValues {
+			if strings.Contains(transportL2Value, "server_port") {
+				transportL2Values := strings.Split(transportL2Value, "=")
+				for _, transportL3Value := range transportL2Values {
+					transportL3Values := strings.Split(transportL3Value, "-")
+					for _, transportL4Value := range transportL3Values {
+						if port, err := strconv.ParseUint(transportL4Value, 10, 32); err == nil {
+							ports = append(ports, uint32(port))
+						}
+					}
+				}
+			}
+		}
+	}
+	return ports
 }

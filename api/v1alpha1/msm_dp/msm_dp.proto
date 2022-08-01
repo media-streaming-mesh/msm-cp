@@ -1,0 +1,73 @@
+/*
+ * Copyright (c) 2022 Cisco and/or its affiliates.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+package msm_dp;
+
+option go_package = "github.com/media-streaming-mesh/msm-dp/api/v1alpha1/msm_dp;msm_dp";
+
+enum StreamOperation {
+	CREATE = 0;
+	UPDATE = 1;
+	DELETE = 2;
+	ADD_EP = 3;
+	DEL_EP = 4;
+	UPD_EP = 5;
+}
+
+enum ProxyProtocol { 
+	TCP = 0;
+	UDP = 1;
+	QUIC = 2;
+	RTP = 3;
+}
+
+enum Encap {
+	TCP_IP = 0;
+	UDP_IP = 1;
+	QUIC_IP = 2;
+	RTP_UDP = 3;
+	RTP_UDP_MUX = 4;
+	RTP_TCP = 5;
+	RTP_TCP_MUX = 6;
+	RTP_QUIC_STREAM = 7;
+	RTP_QUIC_DGRAM = 8;
+}
+
+message Endpoint {
+	string ip = 1;
+	uint32 port = 2;
+	uint32 quic_stream = 3;
+	uint32 encap = 4;
+}
+
+message StreamData {
+	uint32 id = 1;
+	StreamOperation operation = 2;
+	ProxyProtocol protocol = 3;
+	Endpoint endpoint = 4;
+	bool enable = 5;
+}
+
+message StreamResult {
+	bool success = 1;
+	string error_message = 2;
+}
+
+service MsmDataPlane {
+	rpc stream_add_del (StreamData) returns (StreamResult) {}
+}

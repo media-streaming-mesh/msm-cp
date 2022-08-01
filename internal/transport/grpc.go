@@ -17,9 +17,11 @@
 package transport
 
 import (
+	"fmt"
 	"time"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -28,6 +30,11 @@ type grpcServer struct {
 	opts *options
 
 	server *grpc.Server
+}
+
+type grpcClient struct {
+	conn   *grpc.ClientConn
+	client pb_dp.MsmDataPlaneClient
 }
 
 // newGrpcServer initializes a new gRPC server
@@ -50,6 +57,15 @@ func newGrpcServer(opts *options) (*grpcServer, error) {
 		opts:   opts,
 		server: s,
 	}, nil
+}
+
+func newGRPCClient() (*grpcClient, error) {
+	fmt.Printf("Starting grpc client on addr 10.96.5.1:9000...\n")
+	conn, err := grpc.Dial("10.96.5.1:9000", grpc.WithInsecure())
+
+	return &grpcClient{
+		conn: conn,
+	}, err
 }
 
 // start runs the GRPC server
@@ -82,4 +98,14 @@ func (s *grpcServer) close() {
 		log.Debug("forcefully stopping after 5 seconds of wait")
 		s.server.Stop()
 	}
+}
+
+// start run the GRPC client
+func (s *grpcClient) start() {
+	s.client = pb_dp.NewMsmDataPlaneClient(s.conn)
+}
+
+//stop grpc client
+func (s *grpcClient) close() {
+	s.conn.Close()
 }
