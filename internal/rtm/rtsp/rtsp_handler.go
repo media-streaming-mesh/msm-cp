@@ -111,14 +111,6 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 		// res := &base.Response { bad request or something}
 		return nil, err
 	}
-	//Update remote RTSTConnection
-	sc, _ := r.getRemoteRTSPConnection(s)
-	sc.state = Options
-	sc.lastResponse = res
-	sc.lastError = err
-
-	// logs options supported
-	r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
 	return res, nil
 
 }
@@ -126,17 +118,25 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 // called after receiving a DESCRIBE request.
 func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
-	res, err := r.clientToServer(req, s)
 
-	//Update remote RTSTConnection
-	sc, _ := r.getRemoteRTSPConnection(s)
-	sc.state = Describe
-	sc.lastResponse = res
-	sc.lastError = err
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Describe
 
-	//Logs
-	r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
-	return res, err
+	s_rc, error := r.getRemoteRTSPConnection(s)
+	if error != nil {
+		return nil, error
+	}
+	if s_rc.state < Describe {
+		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
+		res, err := r.clientToServer(req, s)
+		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
+
+		s_rc.state = Describe
+		s_rc.response[Describe] = res
+		s_rc.responseErr[Describe] = err
+	}
+
+	return s_rc.response[Describe], s_rc.responseErr[Describe]
 }
 
 // called after receiving an ANNOUNCE request.
@@ -152,12 +152,15 @@ func (r *RTSP) OnAnnounce(req *base.Request, s *pb.Message) (*base.Response, err
 func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	sc, error := r.getRemoteRTSPConnection(s)
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Setup
+
+	s_rc, error := r.getRemoteRTSPConnection(s)
 	if error != nil {
 		return nil, error
 	}
 
-	if sc.state != Setup {
+	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 
 		res, err := r.clientToServer(req, s)
@@ -165,26 +168,29 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
-		if strings.Contains(sc.lastResponse.String(), "trackID=1") {
+		describeResponse := s_rc.response[Describe]
+		if strings.Contains(describeResponse.String(), "trackID=1") && s_rc.response[Setup] == nil {
 			r.logger.Debugf("RTSPConnection connection has both audio and video")
 		} else {
-			sc.state = Setup
+			s_rc.state = Setup
 		}
-		sc.lastResponse = res
-		sc.lastError = err
+		s_rc.response[Setup] = res
+		s_rc.responseErr[Setup] = err
 	}
 
-	if sc.state == Setup {
-		// 1. Find the remote endpoint
-		ep, err := r.getEndpointFromPath(req.URL)
+	if s_rc.state == Setup {
+		// 1. Get client/remote endpoint
+		clientEp := getRemoteIPv4Address(s.Remote)
+		serverEp, err := r.getEndpointFromPath(req.URL)
 		if err != nil {
 			r.logger.Errorf("could not find endpoint")
 			return nil, err
 		}
 
-		// 2. Find remote ports
-		clientPorts := getClientPorts(sc.lastResponse.Header["Transport"])
-		serverPorts := getServerPorts(sc.lastResponse.Header["Transport"])
+		// 2. Get client/remote ports
+		describeResponse := s_rc.response[Setup]
+		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+		serverPorts := getServerPorts(describeResponse.Header["Transport"])
 
 		r.logger.Debugf("client ports %v", clientPorts)
 		r.logger.Debugf("server ports %v", serverPorts)
@@ -198,20 +204,64 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 			r.logger,
 			grpcClient,
 		}
-		createStreamErr := dpGrpcClient.CreateStream(ep, serverPorts[0])
-		r.logger.Debugf("Create stream error %v", createStreamErr)
+		stream, createStreamResult := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
+		r.logger.Debugf("Create stream %v %v", stream, createStreamResult)
+		endpoint, createEpResult := dpGrpcClient.CreateEndpoint(stream.Id, clientEp, clientPorts[0])
+		r.logger.Debugf("Created ep %v %v", endpoint, createEpResult)
+
+		dpGrpcClient.Close()
 	}
 
-	return sc.lastResponse, sc.lastError
+	return s_rc.response[Setup], s_rc.responseErr[Setup]
 }
 
 // called after receiving a PLAY request.
 func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
-	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] PLAY RESPONSE %+v", res)
 
-	return res, err
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Play
+
+	s_rc, error := r.getRemoteRTSPConnection(s)
+	if error != nil {
+		return nil, error
+	}
+
+	if s_rc.state < Play {
+		r.logger.Debugf("RTSPConnection connection state not PLAY")
+		res, err := r.clientToServer(req, s)
+		r.logger.Debugf("[s->c] PLAY RESPONSE %+v", res)
+
+		s_rc.state = Play
+		s_rc.response[Play] = res
+		s_rc.responseErr[Play] = err
+	}
+
+	if s_rc.state >= Play {
+		// 1. Get client endpoint
+		clientEp := getRemoteIPv4Address(s.Remote)
+
+		// 2. Get client ports
+		describeResponse := s_rc.response[Setup]
+		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+
+		r.logger.Debugf("client ports %v", clientPorts)
+
+		//TODO: create GRPC connection to server once
+		grpcClient, err := transport.SetupClient()
+		if err != nil {
+			r.logger.Debugf("Failed to connect to server, error %s\n", err)
+		}
+		dpGrpcClient := transport.Client{
+			r.logger,
+			grpcClient,
+		}
+
+		endpoint, updatEpResult := dpGrpcClient.UpdateEndpoint(1, clientEp, clientPorts[0])
+		r.logger.Debugf("Update ep %v %v", endpoint, updatEpResult)
+	}
+
+	return s_rc.response[Play], s_rc.responseErr[Play]
 }
 
 // called after receiving a RECORD request.
@@ -258,32 +308,41 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		r.logger.Debugf("Remote endpoint RTSP connection open")
 	}
 
-	// 5. Forward OPTIONS command to sever pod
-	data := bytes.NewBuffer(make([]byte, 0, 4096))
-	req.Write(data)
+	// 4. Update target to client pod
 	messageData := srv.(*StubConnection).data
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Options
+	rc.targetAddr = ep
+	rc.targetLocal = messageData.Local
+	rc.targetRemote = messageData.Remote
 
-	optionsMsg := &pb.Message{
-		Event:  pb.Event_DATA,
-		Local:  messageData.Local,
-		Remote: messageData.Remote,
-		Data:   fmt.Sprintf("%s", data),
+	s_rc, _ := r.getRemoteRTSPConnection(s)
+	if s_rc.state < Options {
+		// 5. Forward OPTIONS command to sever pod
+		data := bytes.NewBuffer(make([]byte, 0, 4096))
+		req.Write(data)
+
+		optionsMsg := &pb.Message{
+			Event:  pb.Event_DATA,
+			Local:  messageData.Local,
+			Remote: messageData.Remote,
+			Data:   fmt.Sprintf("%s", data),
+		}
+
+		srv.(*StubConnection).conn.Send(optionsMsg)
+		r.logger.Debugf("waiting on options response")
+		res := <-srv.(*StubConnection).dataCh
+
+		//Update remote RTSTConnection
+		s_rc.state = Options
+		s_rc.response[Options] = res
+		s_rc.responseErr[Options] = err
+
+		//Log
+		r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
 	}
 
-	// update target to client pod
-	key := getRTSPConnectionKey(s.Local, s.Remote)
-	rc, ok := r.rtspConn.Load(key)
-	rc.(*RTSPConnection).state = Options
-	rc.(*RTSPConnection).targetAddr = ep
-	rc.(*RTSPConnection).targetLocal = messageData.Local
-	rc.(*RTSPConnection).targetRemote = messageData.Remote
-
-	//Send options to server pod
-	srv.(*StubConnection).conn.Send(optionsMsg)
-	r.logger.Debugf("waiting on options response")
-	res := <-srv.(*StubConnection).dataCh
-
-	return res, nil
+	return s_rc.response[Options], nil
 }
 
 func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -359,21 +418,30 @@ func (r *RTSP) isConnectionOpen(ep string) bool {
 	return check
 }
 
-func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
+func (r *RTSP) getClientRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 	// Client RTSPConnection
 	key := getRTSPConnectionKey(s.Local, s.Remote)
-	sc, ok := r.rtspConn.Load(key)
+	rc, ok := r.rtspConn.Load(key)
 	if !ok {
+		return nil, errors.New("Can't find client RTSP connection")
+	}
+	return rc.(*RTSPConnection), nil
+}
+
+func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
+	// Client RTSPConnection
+	rc, err := r.getClientRTSPConnection(s)
+	if err != nil {
 		return nil, errors.New("Can't find client RTSP connection")
 	}
 
 	// Server RTSPConnection
-	s_key := getRTSPConnectionKey(sc.(*RTSPConnection).targetLocal, sc.(*RTSPConnection).targetRemote)
-	s_sc, s_ok := r.rtspConn.Load(s_key)
+	s_key := getRTSPConnectionKey(rc.targetLocal, rc.targetRemote)
+	s_rc, s_ok := r.rtspConn.Load(s_key)
 	if !s_ok {
 		return nil, errors.New("Can't find server RTSP connection")
 	}
-	return s_sc.(*RTSPConnection), nil
+	return s_rc.(*RTSPConnection), nil
 }
 
 func getClientPorts(value base.HeaderValue) []uint32 {

@@ -28,24 +28,26 @@ type RTSPConnection struct {
 	targetRemote string
 	targetAddr   string
 	session      map[string]*RTSPSession
-	lastResponse *base.Response
-	lastError    error
+	response     map[RTSPConnectionState]*base.Response
+	responseErr  map[RTSPConnectionState]error
 }
 
 type RTSPConnectionState int
 
 const (
 	Create   RTSPConnectionState = 0
-	Describe                     = 1
-	Options                      = 2
+	Options                      = 1
+	Describe                     = 2
 	Setup                        = 3
 	Play                         = 4
 )
 
 func newRTSPConnection(log *logrus.Logger) *RTSPConnection {
 	return &RTSPConnection{
-		logger:  log,
-		state:   Create,
-		session: make(map[string]*RTSPSession),
+		logger:      log,
+		state:       Create,
+		session:     make(map[string]*RTSPSession),
+		response:    make(map[RTSPConnectionState]*base.Response),
+		responseErr: make(map[RTSPConnectionState]error),
 	}
 }

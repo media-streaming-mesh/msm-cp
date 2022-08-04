@@ -5,7 +5,24 @@ import (
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/sirupsen/logrus"
 	"strconv"
+	"sync"
 )
+
+var streamId StreamId
+
+// Stream id type uint32 auto increment
+type StreamId struct {
+	sync.Mutex
+	id uint32
+}
+
+func (si *StreamId) ID() (id uint32) {
+	si.Lock()
+	defer si.Unlock()
+	id = si.id
+	si.id++
+	return
+}
 
 // Client holds the client specific data structures
 type Client struct {
@@ -19,7 +36,11 @@ func SetupClient() (*grpcClient, error) {
 	return grpcClient, err
 }
 
-func (c *Client) CreateStream(ip string, port uint32) error {
+func (c *Client) Close() {
+	c.GrpcClient.close()
+}
+
+func (c *Client) CreateStream(ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
 	//Prepare CREATE data
 	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
 
@@ -29,24 +50,18 @@ func (c *Client) CreateStream(ip string, port uint32) error {
 		Encap: uint32(encap),
 	}
 	req := pb.StreamData{
-		Id:        1, //TODO: autogenerate stream ID
+		Id:        streamId.ID(),
 		Operation: pb.StreamOperation_CREATE,
 		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 	}
 
 	//Send data to RTPProxy
-	stream, err := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
-	c.Log.Debug("Send stream %v", stream)
-
-	if err != nil {
-		c.Log.Debugf("Send stream error")
-	}
-	c.Log.Debugf("Finished send stream")
-	return err
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return req, stream
 }
 
-func (c *Client) CreateEndpoint(ip string, port uint32) error {
+func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
 	//Prepare AddEndpoint data
 	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
 
@@ -56,13 +71,31 @@ func (c *Client) CreateEndpoint(ip string, port uint32) error {
 		Encap: uint32(encap),
 	}
 	req := pb.StreamData{
-		Id:        1, //TODO: autogenerate stream ID
+		Id:        streamId,
 		Operation: pb.StreamOperation_ADD_EP,
 		Endpoint:  &endpoint,
 	}
 
 	//Send data to RTPProxy
-	stream, err := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
-	c.Log.Debug("Send stream %v", stream)
-	return err
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return endpoint, stream
+}
+
+func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
+	//Prepare AddEndpoint data
+
+	endpoint := pb.Endpoint{
+		Ip:   ip,
+		Port: port,
+	}
+	req := pb.StreamData{
+		Id:        streamId,
+		Operation: pb.StreamOperation_UPDATE,
+		Endpoint:  &endpoint,
+		Enable:    true,
+	}
+
+	//Send data to RTPProxy
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return endpoint, stream
 }
