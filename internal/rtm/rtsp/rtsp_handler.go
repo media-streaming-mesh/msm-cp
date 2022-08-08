@@ -449,6 +449,10 @@ func getClientPorts(value base.HeaderValue) []uint32 {
 	for _, transportValue := range value {
 		transportValues := strings.Split(transportValue, ";")
 		for _, transportL2Value := range transportValues {
+			if strings.Contains(transportL2Value, "interleaved") {
+				//TODO: return 8051 when transport return RTCP
+				ports = append(ports, uint32(8050))
+			}
 			if strings.Contains(transportL2Value, "client_port") {
 				transportL2Values := strings.Split(transportL2Value, "=")
 				for _, transportL3Value := range transportL2Values {
@@ -470,6 +474,10 @@ func getServerPorts(value base.HeaderValue) []uint32 {
 	for _, transportValue := range value {
 		transportValues := strings.Split(transportValue, ";")
 		for _, transportL2Value := range transportValues {
+			if strings.Contains(transportL2Value, "interleaved") {
+				//TODO: return 8051 when transport return RTCP
+				ports = append(ports, uint32(8050))
+			}
 			if strings.Contains(transportL2Value, "server_port") {
 				transportL2Values := strings.Split(transportL2Value, "=")
 				for _, transportL3Value := range transportL2Values {
