@@ -30,8 +30,8 @@ type Client struct {
 	GrpcClient *grpcClient
 }
 
-func SetupClient() (*grpcClient, error) {
-	grpcClient, err := newGRPCClient()
+func SetupClient(ip string) (*grpcClient, error) {
+	grpcClient, err := newGRPCClient(ip)
 	grpcClient.start()
 	return grpcClient, err
 }

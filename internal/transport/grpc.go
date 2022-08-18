@@ -59,9 +59,10 @@ func newGrpcServer(opts *options) (*grpcServer, error) {
 	}, nil
 }
 
-func newGRPCClient() (*grpcClient, error) {
-	fmt.Printf("Starting grpc client on addr 10.96.5.1:9000...\n")
-	conn, err := grpc.Dial("10.96.5.1:9000", grpc.WithInsecure())
+func newGRPCClient(ip string) (*grpcClient, error) {
+	clientip := fmt.Sprint(ip, ":9000")
+	fmt.Printf("Starting grpc client on addr %v...\n", clientip)
+	conn, err := grpc.Dial(clientip, grpc.WithInsecure())
 
 	return &grpcClient{
 		conn: conn,

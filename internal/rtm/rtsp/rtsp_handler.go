@@ -160,6 +160,11 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		return nil, error
 	}
 
+	dataplaneIP, err := r.urlHandler.GetNodeIp(rc.targetAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 
@@ -196,7 +201,7 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		r.logger.Debugf("server ports %v", serverPorts)
 
 		//TODO: create GRPC connection to server once
-		grpcClient, err := transport.SetupClient()
+		grpcClient, err := transport.SetupClient(dataplaneIP)
 		if err != nil {
 			r.logger.Debugf("Failed to connect to server, error %s\n", err)
 		}
@@ -227,6 +232,11 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 		return nil, error
 	}
 
+	dataplaneIP, err := r.urlHandler.GetNodeIp(rc.targetAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	if s_rc.state < Play {
 		r.logger.Debugf("RTSPConnection connection state not PLAY")
 		res, err := r.clientToServer(req, s)
@@ -248,7 +258,7 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 		r.logger.Debugf("client ports %v", clientPorts)
 
 		//TODO: create GRPC connection to server once
-		grpcClient, err := transport.SetupClient()
+		grpcClient, err := transport.SetupClient(dataplaneIP)
 		if err != nil {
 			r.logger.Debugf("Failed to connect to server, error %s\n", err)
 		}
