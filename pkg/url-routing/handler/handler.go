@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	v12 "k8s.io/api/core/v1"
 	"log"
 	"net"
 	"net/url"
@@ -214,28 +213,4 @@ func (uh *UrlHandler) resolveHost(host string) []string {
 	// dns not needed, already an ip
 	uh.log("resolution: %v", ip)
 	return []string{ip.String()}
-}
-
-func (uh *UrlHandler) GetNodeIp(hostname string) (string, error) {
-	uh.log("Get node ip  for hostname %v", hostname)
-	nodes, err := uh.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
-
-	if err != nil {
-		uh.log("failed to get service endpoints")
-		return "", err
-	}
-
-	for _, node := range nodes.Items {
-		uh.log("Node name %v", node.Name)
-		uh.log("Node PodCIDR %v", node.Spec.PodCIDR)
-		for _, address := range node.Status.Addresses {
-			if address.Type == v12.NodeInternalIP {
-				uh.log("Node internal IP %v", address)
-				//TODO: handle multiple nodes
-				return address.Address, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("Can't get node ip")
-
 }

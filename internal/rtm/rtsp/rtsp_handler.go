@@ -23,6 +23,7 @@ import (
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"google.golang.org/grpc/peer"
 	"log"
 	"net"
@@ -160,11 +161,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		return nil, error
 	}
 
-	dataplaneIP, err := r.urlHandler.GetNodeIp(rc.targetAddr)
-	if err != nil {
-		return nil, err
-	}
-
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 
@@ -189,6 +185,11 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		serverEp, err := r.getEndpointFromPath(req.URL)
 		if err != nil {
 			r.logger.Errorf("could not find endpoint")
+			return nil, err
+		}
+		dataplaneIP, err := node_mapper.MapNode(clientEp)
+		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+		if err != nil {
 			return nil, err
 		}
 
@@ -232,11 +233,6 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 		return nil, error
 	}
 
-	dataplaneIP, err := r.urlHandler.GetNodeIp(rc.targetAddr)
-	if err != nil {
-		return nil, err
-	}
-
 	if s_rc.state < Play {
 		r.logger.Debugf("RTSPConnection connection state not PLAY")
 		res, err := r.clientToServer(req, s)
@@ -250,6 +246,12 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 	if s_rc.state >= Play {
 		// 1. Get client endpoint
 		clientEp := getRemoteIPv4Address(s.Remote)
+
+		dataplaneIP, err := node_mapper.MapNode(clientEp)
+		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+		if err != nil {
+			return nil, err
+		}
 
 		// 2. Get client ports
 		describeResponse := s_rc.response[Setup]
