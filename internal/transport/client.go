@@ -90,7 +90,7 @@ func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	}
 	req := pb.StreamData{
 		Id:        streamId,
-		Operation: pb.StreamOperation_UPDATE,
+		Operation: pb.StreamOperation_UPD_EP,
 		Endpoint:  &endpoint,
 		Enable:    true,
 	}
