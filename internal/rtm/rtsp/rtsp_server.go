@@ -20,7 +20,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"io"
 	"strings"
 	"sync"
@@ -38,6 +41,7 @@ type RTSP struct {
 	methods    []base.Method
 	stubConn   *sync.Map
 	rtspConn   *sync.Map
+	rtspStream *sync.Map
 }
 
 // Option configures NewRTSP
@@ -90,6 +94,7 @@ func NewRTSP(opts ...Option) *RTSP {
 		methods:    cfg.SupportedMethods,
 		stubConn:   new(sync.Map),
 		rtspConn:   new(sync.Map),
+		rtspStream: new(sync.Map),
 	}
 
 }
@@ -162,8 +167,14 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 					Data:   fmt.Sprintf("%s", data),
 				}
 
+				//Send response back to client
 				if err := srv.Send(pbRes); err != nil {
 					r.logger.Errorf("could not send response, error: %v", err)
+				} else {
+					//Update data to proxy
+					if err := r.SendProxyData(req, stream); err != nil {
+						r.logger.Errorf("Could not send proxy data")
+					}
 				}
 			} else if errRes == nil {
 				// received a server-side response
@@ -177,4 +188,94 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 	}
+}
+
+func (r *RTSP) SendProxyData(req *base.Request, s *pb.Message) error {
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Setup
+
+	s_rc, error := r.getRemoteRTSPConnection(s)
+	if error != nil {
+		return error
+	}
+
+	if s_rc.state == Setup {
+		// 1. Get client/remote endpoint
+		clientEp := getRemoteIPv4Address(s.Remote)
+		serverEp, err := r.getEndpointFromPath(req.URL)
+		if err != nil {
+			r.logger.Errorf("could not find endpoint")
+			return err
+		}
+		dataplaneIP, err := node_mapper.MapNode(clientEp)
+		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+		if err != nil {
+			return err
+		}
+
+		// 2. Get client/remote ports
+		describeResponse := s_rc.response[Setup]
+		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+		serverPorts := getServerPorts(describeResponse.Header["Transport"])
+
+		r.logger.Debugf("client ports %v", clientPorts)
+		r.logger.Debugf("server ports %v", serverPorts)
+
+		//TODO: create GRPC connection to server once
+		grpcClient, err := transport.SetupClient(dataplaneIP)
+		if err != nil {
+			r.logger.Debugf("Failed to connect to server, error %s\n", err)
+		}
+		dpGrpcClient := transport.Client{
+			r.logger,
+			grpcClient,
+		}
+		stream, createStreamResult := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
+		r.logger.Debugf("Create stream %v %v", stream, createStreamResult)
+		r.rtspStream.Store(serverEp, stream.Id)
+
+		endpoint, createEpResult := dpGrpcClient.CreateEndpoint(stream.Id, clientEp, clientPorts[0])
+		r.logger.Debugf("Created ep %v %v", endpoint, createEpResult)
+
+		dpGrpcClient.Close()
+	}
+
+	if s_rc.state >= Play {
+		// 1. Get client/remote endpoint
+		clientEp := getRemoteIPv4Address(s.Remote)
+		serverEp, err := r.getEndpointFromPath(req.URL)
+		if err != nil {
+			r.logger.Errorf("could not find endpoint")
+			return err
+		}
+		dataplaneIP, err := node_mapper.MapNode(clientEp)
+		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+		if err != nil {
+			return err
+		}
+		streamId, ok := r.rtspStream.Load(serverEp)
+		if !ok {
+			return errors.New("Can't find stream id")
+		}
+
+		// 2. Get client ports
+		describeResponse := s_rc.response[Setup]
+		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+
+		r.logger.Debugf("client ports %v", clientPorts)
+
+		//TODO: create GRPC connection to server once
+		grpcClient, err := transport.SetupClient(dataplaneIP)
+		if err != nil {
+			r.logger.Debugf("Failed to connect to server, error %s\n", err)
+		}
+		dpGrpcClient := transport.Client{
+			r.logger,
+			grpcClient,
+		}
+
+		endpoint, updatEpResult := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPorts[0])
+		r.logger.Debugf("Update ep %v %v", endpoint, updatEpResult)
+	}
+	return nil
 }

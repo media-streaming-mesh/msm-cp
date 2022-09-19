@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"google.golang.org/grpc/peer"
 	"log"
 	"net"
@@ -179,45 +177,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		s_rc.responseErr[Setup] = err
 	}
 
-	if s_rc.state == Setup {
-		// 1. Get client/remote endpoint
-		clientEp := getRemoteIPv4Address(s.Remote)
-		serverEp, err := r.getEndpointFromPath(req.URL)
-		if err != nil {
-			r.logger.Errorf("could not find endpoint")
-			return nil, err
-		}
-		dataplaneIP, err := node_mapper.MapNode(clientEp)
-		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
-		if err != nil {
-			return nil, err
-		}
-
-		// 2. Get client/remote ports
-		describeResponse := s_rc.response[Setup]
-		clientPorts := getClientPorts(describeResponse.Header["Transport"])
-		serverPorts := getServerPorts(describeResponse.Header["Transport"])
-
-		r.logger.Debugf("client ports %v", clientPorts)
-		r.logger.Debugf("server ports %v", serverPorts)
-
-		//TODO: create GRPC connection to server once
-		grpcClient, err := transport.SetupClient(dataplaneIP)
-		if err != nil {
-			r.logger.Debugf("Failed to connect to server, error %s\n", err)
-		}
-		dpGrpcClient := transport.Client{
-			r.logger,
-			grpcClient,
-		}
-		stream, createStreamResult := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
-		r.logger.Debugf("Create stream %v %v", stream, createStreamResult)
-		endpoint, createEpResult := dpGrpcClient.CreateEndpoint(stream.Id, clientEp, clientPorts[0])
-		r.logger.Debugf("Created ep %v %v", endpoint, createEpResult)
-
-		dpGrpcClient.Close()
-	}
-
 	return s_rc.response[Setup], s_rc.responseErr[Setup]
 }
 
@@ -241,36 +200,6 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 		s_rc.state = Play
 		s_rc.response[Play] = res
 		s_rc.responseErr[Play] = err
-	}
-
-	if s_rc.state >= Play {
-		// 1. Get client endpoint
-		clientEp := getRemoteIPv4Address(s.Remote)
-
-		dataplaneIP, err := node_mapper.MapNode(clientEp)
-		r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
-		if err != nil {
-			return nil, err
-		}
-
-		// 2. Get client ports
-		describeResponse := s_rc.response[Setup]
-		clientPorts := getClientPorts(describeResponse.Header["Transport"])
-
-		r.logger.Debugf("client ports %v", clientPorts)
-
-		//TODO: create GRPC connection to server once
-		grpcClient, err := transport.SetupClient(dataplaneIP)
-		if err != nil {
-			r.logger.Debugf("Failed to connect to server, error %s\n", err)
-		}
-		dpGrpcClient := transport.Client{
-			r.logger,
-			grpcClient,
-		}
-
-		endpoint, updatEpResult := dpGrpcClient.UpdateEndpoint(1, clientEp, clientPorts[0])
-		r.logger.Debugf("Update ep %v %v", endpoint, updatEpResult)
 	}
 
 	return s_rc.response[Play], s_rc.responseErr[Play]
