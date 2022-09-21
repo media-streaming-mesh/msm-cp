@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.17 as builder
+FROM --platform=$BUILDPLATFORM golang:1.17 as builder
 
 WORKDIR /workspace
 
@@ -15,8 +15,12 @@ COPY pkg/ pkg/
 
 RUN go mod download
 
+ARG TARGETOS TARGETARCH
+
 # Build
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o msm-controller cmd/msm-cp/main.go
+RUN --mount=type=cache,target=/root/.cache/go-build \
+        --mount=type=cache,target=/go/pkg \
+        GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -o msm-controller cmd/msm-cp/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
