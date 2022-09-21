@@ -214,6 +214,29 @@ func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 	}, nil
 }
 
+// called after receiving a GET_PARAMETER request.
+func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response, error) {
+	r.logger.Debugf("[c->s] %+v", req)
+
+	res, err := r.clientToServer(req, s)
+	r.logger.Debugf("[s->c] GET_PARAMETER RESPONSE %+v", res)
+
+	return res, err
+}
+
+// called after receiving a TEARDOWN request.
+func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
+	r.logger.Debugf("[c->s] %+v", req)
+
+	//res, err := r.clientToServer(req, s)
+	//r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+
+	//return res, err
+	return &base.Response{
+		StatusCode: base.StatusOK,
+	}, nil
+}
+
 func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response, error) {
 
 	// 1. Find the remote endpoint to connect

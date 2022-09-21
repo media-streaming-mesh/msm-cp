@@ -172,8 +172,10 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 					r.logger.Errorf("could not send response, error: %v", err)
 				} else {
 					//Update data to proxy
-					if err := r.SendProxyData(req, stream); err != nil {
-						r.logger.Errorf("Could not send proxy data")
+					if req.Method == base.Setup || req.Method == base.Play {
+						if err := r.SendProxyData(req, stream); err != nil {
+							r.logger.Errorf("Could not send proxy data")
+						}
 					}
 				}
 			} else if errRes == nil {

@@ -83,7 +83,24 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 
 			return res, err
 		}
+	case base.Teardown:
+		if sxID != "" {
+			res, err := r.OnTeardown(req, s)
+			if err != nil {
+				return nil, err
+			}
 
+			return res, err
+		}
+	case base.GetParameter:
+		if sxID != "" {
+			res, err := r.OnGetParameter(req, s)
+			if err != nil {
+				return nil, err
+			}
+
+			return res, err
+		}
 	}
 	return &base.Response{
 		StatusCode: base.StatusBadRequest,
