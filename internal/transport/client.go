@@ -99,3 +99,21 @@ func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return endpoint, stream
 }
+
+func (c *Client) DeleteEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
+	//Prepare AddEndpoint data
+
+	endpoint := pb.Endpoint{
+		Ip:   ip,
+		Port: port,
+	}
+	req := pb.StreamData{
+		Id:        streamId,
+		Operation: pb.StreamOperation_DEL_EP,
+		Endpoint:  &endpoint,
+	}
+
+	//Send data to RTPProxy
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return endpoint, stream
+}

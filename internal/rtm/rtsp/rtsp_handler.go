@@ -228,8 +228,25 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	//res, err := r.clientToServer(req, s)
-	//r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+	//Update remote rtsp state
+	s_rc, error := r.getRemoteRTSPConnection(s)
+	if error != nil {
+		return nil, error
+	}
+	s_rc.state = Teardown
+
+	//send data to msm-proxy
+	if err := r.SendProxyData(req, s); err != nil {
+		r.logger.Errorf("Could not send proxy data %v", err)
+	}
+
+	//check if this is the last client
+	clientEp := getRemoteIPv4Address(s.Remote)
+	if r.isLastClient(clientEp) {
+		res, err := r.clientToServer(req, s)
+		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+		return res, err
+	}
 
 	//return res, err
 	return &base.Response{
@@ -380,6 +397,26 @@ func (r *RTSP) isConnectionOpen(ep string) bool {
 		return true
 	})
 	return check
+}
+
+func (r *RTSP) isLastClient(ep string) bool {
+	streamId, ok := r.rtspEndpoint.Load(ep)
+	if !ok {
+		return false
+	}
+
+	var epCount = 0
+	r.rtspEndpoint.Range(func(ep, sId interface{}) bool {
+		if sId.(uint32) == streamId.(uint32) {
+			epCount += 1
+		}
+		return true
+	})
+
+	if epCount == 1 {
+		return true
+	}
+	return false
 }
 
 func (r *RTSP) getClientRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
