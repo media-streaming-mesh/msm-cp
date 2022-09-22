@@ -228,6 +228,9 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
+	clientEp := getRemoteIPv4Address(s.Remote)
+	isLastClient := r.isLastClient(clientEp)
+
 	//Update remote rtsp state
 	s_rc, error := r.getRemoteRTSPConnection(s)
 	if error != nil {
@@ -240,9 +243,8 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 		r.logger.Errorf("Could not send proxy data %v", err)
 	}
 
-	//check if this is the last client
-	clientEp := getRemoteIPv4Address(s.Remote)
-	if r.isLastClient(clientEp) {
+	//Send TEARDOWN to server if last client
+	if isLastClient {
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
