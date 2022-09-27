@@ -75,16 +75,20 @@ func (r *RTSP) OnConnClose(msg *pb.Message) {
 
 	// find RTSP connection and delete it
 	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	r.rtspConn.Delete(key)
+	rtspConn, _ := r.rtspConn.LoadAndDelete(key)
 
-	// read from channel to unblock write
-	stubAddr := getRemoteIPv4Address(msg.Remote)
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.logger.Errorf("stub connection was not found!")
-		return
+	// For client, read from channel to unblock write
+	if rtspConn.(*RTSPConnection).targetAddr != "" {
+		stubAddr := getRemoteIPv4Address(msg.Remote)
+		srv, ok := r.stubConn.Load(stubAddr)
+		if !ok {
+			r.logger.Errorf("stub connection was not found!")
+			return
+		}
+		r.logger.Infof("Unblock write channel for %v", msg.Remote)
+		<-srv.(*StubConnection).addCh
 	}
-	<-srv.(*StubConnection).addCh
+
 	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
 }
 

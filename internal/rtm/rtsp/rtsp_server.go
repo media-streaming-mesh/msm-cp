@@ -32,7 +32,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	db "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 )
 
@@ -236,25 +235,25 @@ func (r *RTSP) SendProxyData(req *base.Request, s *pb.Message) error {
 			grpcClient,
 		}
 
-		var stream db.StreamData
+		var streamId uint32
 
 		data, ok := r.rtspStream.Load(serverEp)
 		if ok {
-			stream = data.(db.StreamData)
+			streamId = data.(uint32)
 		} else {
 			stream, result := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
 			r.rtspStream.Store(serverEp, stream.Id)
 			r.logger.Debugf("Create stream %v %v", stream, result)
 		}
 
-		endpoint, result := dpGrpcClient.CreateEndpoint(stream.Id, clientEp, clientPorts[0])
-		r.rtspEndpoint.Store(clientEp, stream.Id)
+		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPorts[0])
+		r.rtspEndpoint.Store(clientEp, streamId)
 		r.logger.Debugf("Created ep %v %v", endpoint, result)
 
 		dpGrpcClient.Close()
 	}
 
-	if s_rc.state >= Play {
+	if s_rc.state == Play {
 		// 1. Get client/remote endpoint
 		clientEp := getRemoteIPv4Address(s.Remote)
 		serverEp, err := r.getEndpointFromPath(req.URL)

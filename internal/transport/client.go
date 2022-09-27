@@ -73,6 +73,7 @@ func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	req := pb.StreamData{
 		Id:        streamId,
 		Operation: pb.StreamOperation_ADD_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 	}
 
@@ -91,6 +92,7 @@ func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	req := pb.StreamData{
 		Id:        streamId,
 		Operation: pb.StreamOperation_UPD_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 		Enable:    true,
 	}
@@ -110,6 +112,7 @@ func (c *Client) DeleteEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	req := pb.StreamData{
 		Id:        streamId,
 		Operation: pb.StreamOperation_DEL_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 	}
 
