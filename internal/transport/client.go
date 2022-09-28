@@ -61,6 +61,27 @@ func (c *Client) CreateStream(ip string, port uint32) (pb.StreamData, *pb.Stream
 	return req, stream
 }
 
+func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
+	//Prepare DELETE data
+	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
+
+	endpoint := pb.Endpoint{
+		Ip:    ip,
+		Port:  port,
+		Encap: uint32(encap),
+	}
+	req := pb.StreamData{
+		Id:        streamId,
+		Operation: pb.StreamOperation_DELETE,
+		Protocol:  pb.ProxyProtocol_RTP,
+		Endpoint:  &endpoint,
+	}
+
+	//Send data to RTPProxy
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return req, stream
+}
+
 func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
 	//Prepare AddEndpoint data
 	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)

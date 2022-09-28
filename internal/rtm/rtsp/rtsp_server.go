@@ -311,11 +311,13 @@ func (r *RTSP) SendProxyData(req *base.Request, s *pb.Message) error {
 			return errors.New("Can't find stream id")
 		}
 
-		// 2. Get client ports
+		// 2. Get client/remote ports
 		describeResponse := s_rc.response[Setup]
 		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+		serverPorts := getServerPorts(describeResponse.Header["Transport"])
 
 		r.logger.Debugf("client ports %v", clientPorts)
+		r.logger.Debugf("server ports %v", serverPorts)
 
 		//TODO: create GRPC connection to server once
 		grpcClient, err := transport.SetupClient(dataplaneIP)
@@ -331,7 +333,9 @@ func (r *RTSP) SendProxyData(req *base.Request, s *pb.Message) error {
 		r.logger.Debugf("Delete ep %v %v", endpoint, result)
 
 		if r.isLastClient(clientEp) {
+			stream, result := dpGrpcClient.DeleteStream(streamId.(uint32), serverEp, serverPorts[0])
 			r.rtspStream.Delete(serverEp)
+			r.logger.Debugf("Delete stream %v %v", stream, result)
 		}
 		r.rtspEndpoint.Delete(clientEp)
 
