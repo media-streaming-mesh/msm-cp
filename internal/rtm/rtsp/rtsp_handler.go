@@ -72,13 +72,20 @@ func (r *RTSP) OnConnOpen(msg *pb.Message) {
 
 // called when a connection is close.
 func (r *RTSP) OnConnClose(msg *pb.Message) {
+	//update rtsp state
+	rc, _ := r.getClientRTSPConnection(msg)
+	if rc.state != Teardown {
+		rc.state = Teardown
+		//Send DELETE_EP to msm-proxy
+		if rc.targetAddr != "" {
+			if err := r.SendProxyData(msg); err != nil {
+				r.logger.Errorf("Could not send proxy data %v", err)
+			}
+		}
+	}
 
-	// find RTSP connection and delete it
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	rtspConn, _ := r.rtspConn.LoadAndDelete(key)
-
-	// For client, read from channel to unblock write
-	if rtspConn.(*RTSPConnection).targetAddr != "" {
+	// For client RTSP, read from channel to unblock write
+	if rc.targetAddr != "" {
 		stubAddr := getRemoteIPv4Address(msg.Remote)
 		srv, ok := r.stubConn.Load(stubAddr)
 		if !ok {
@@ -88,6 +95,10 @@ func (r *RTSP) OnConnClose(msg *pb.Message) {
 		r.logger.Infof("Unblock write channel for %v", msg.Remote)
 		<-srv.(*StubConnection).addCh
 	}
+
+	// find RTSP connection and delete it
+	key := getRTSPConnectionKey(msg.Local, msg.Remote)
+	r.rtspConn.Delete(key)
 
 	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
 }
@@ -232,32 +243,18 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	clientEp := getRemoteIPv4Address(s.Remote)
-	isLastClient := r.isLastClient(clientEp)
+	//update rtsp state
+	rc, _ := r.getClientRTSPConnection(s)
+	rc.state = Teardown
 
-	//Update remote rtsp state
-	s_rc, error := r.getRemoteRTSPConnection(s)
-	if error != nil {
-		return nil, error
-	}
-	s_rc.state = Teardown
-
-	//send data to msm-proxy
-	if err := r.SendProxyData(req, s); err != nil {
+	//Send DELETE_EP to msm-proxy for last client
+	if err := r.SendProxyData(s); err != nil {
 		r.logger.Errorf("Could not send proxy data %v", err)
 	}
 
-	//Send TEARDOWN to server if last client
-	if isLastClient {
-		res, err := r.clientToServer(req, s)
-		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
-		return res, err
-	}
-
-	//return res, err
-	return &base.Response{
-		StatusCode: base.StatusOK,
-	}, nil
+	res, err := r.clientToServer(req, s)
+	r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+	return res, err
 }
 
 func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -418,7 +415,7 @@ func (r *RTSP) isLastClient(ep string) bool {
 		}
 		return true
 	})
-
+	r.logger.Debugf("RTSP client ep count %v", epCount)
 	if epCount == 1 {
 		return true
 	}
