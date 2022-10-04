@@ -243,8 +243,13 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
+	clientEp := getRemoteIPv4Address(s.Remote)
+	isLastClient := r.isLastClient(clientEp)
 	//update rtsp state
-	rc, _ := r.getClientRTSPConnection(s)
+	rc, err := r.getClientRTSPConnection(s)
+	if err != nil {
+		return nil, err
+	}
 	rc.state = Teardown
 
 	//Send DELETE_EP to msm-proxy for last client
@@ -252,9 +257,16 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 		r.logger.Errorf("Could not send proxy data %v", err)
 	}
 
-	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
-	return res, err
+	//Send TEARDOWN to server if last client
+	if isLastClient {
+		res, err := r.clientToServer(req, s)
+		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+		return res, err
+	}
+
+	return &base.Response{
+		StatusCode: base.StatusOK,
+	}, nil
 }
 
 func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -294,13 +306,19 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 
 	// 4. Update target to client pod
 	messageData := srv.(*StubConnection).data
-	rc, _ := r.getClientRTSPConnection(s)
+	rc, err := r.getClientRTSPConnection(s)
+	if err != nil {
+		return nil, err
+	}
 	rc.state = Options
 	rc.targetAddr = ep
 	rc.targetLocal = messageData.Local
 	rc.targetRemote = messageData.Remote
 
-	s_rc, _ := r.getRemoteRTSPConnection(s)
+	s_rc, err := r.getRemoteRTSPConnection(s)
+	if err != nil {
+		return nil, err
+	}
 	if s_rc.state < Options {
 		// 5. Forward OPTIONS command to sever pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
