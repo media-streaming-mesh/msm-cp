@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"google.golang.org/grpc/peer"
 	"log"
 	"net"
@@ -41,6 +42,17 @@ func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
 		conn:   server,
 		addCh:  make(chan *pb.Message, 1),
 		dataCh: make(chan *base.Response, 1),
+	}
+
+	//Send node ip address to stub
+	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
+	r.logger.Debugf("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
+	if err == nil {
+		configMsg := &pb.Message{
+			Event:  pb.Event_CONFIG,
+			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
+		}
+		sc.conn.Send(configMsg)
 	}
 
 	// save stub connection on a sync.Map
@@ -288,11 +300,11 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 
 	// 3. Check if remote endpoint open RTSP connection
 	if !r.isConnectionOpen(ep) {
-		r.logger.Debugf("Send ADD event open RTSP connection for %v", ep)
-		// Send ADD event to server pod
+		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", ep)
+		// Send REQUEST event to server pod
 		_, port, _ := net.SplitHostPort(req.URL.Host)
 		addMsg := &pb.Message{
-			Event:  pb.Event_ADD,
+			Event:  pb.Event_REQUEST,
 			Remote: fmt.Sprintf("%s:%s", ep, port),
 		}
 		srv.(*StubConnection).conn.Send(addMsg)
