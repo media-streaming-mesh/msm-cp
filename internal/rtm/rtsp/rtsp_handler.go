@@ -154,6 +154,7 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 	if s_rc.state < Describe {
 		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
+		req.URL = r.updateURLIpAddress(req.URL)
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
 
@@ -302,7 +303,11 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	if !r.isConnectionOpen(ep) {
 		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", ep)
 		// Send REQUEST event to server pod
-		_, port, _ := net.SplitHostPort(req.URL.Host)
+		_, port, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			r.logger.Errorf("could not split host port")
+			return nil, err
+		}
 		addMsg := &pb.Message{
 			Event:  pb.Event_REQUEST,
 			Remote: fmt.Sprintf("%s:%s", ep, port),
@@ -334,6 +339,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	if s_rc.state < Options {
 		// 5. Forward OPTIONS command to sever pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
+		req.URL = r.updateURLIpAddress(req.URL)
 		req.Write(data)
 
 		optionsMsg := &pb.Message{
@@ -363,13 +369,13 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	key := getRTSPConnectionKey(s.Local, s.Remote)
 	sc, ok := r.rtspConn.Load(key)
 	if !ok {
-		return nil, errors.New("shit3")
+		return nil, errors.New("Can't load rtsp connection")
 	}
 
 	stubAddr := sc.(*RTSPConnection).targetAddr
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
-		return nil, errors.New("shit5")
+		return nil, errors.New("can't load stub connection")
 	}
 
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
@@ -526,4 +532,15 @@ func getServerPorts(value base.HeaderValue) []uint32 {
 		}
 	}
 	return ports
+}
+
+func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
+	ep, err := r.getEndpointFromPath(url)
+	if err != nil {
+		r.logger.Errorf("could not find endpoint")
+		return url
+	}
+	url.Host = ep
+	r.logger.Debugf("Update url to %v", url)
+	return url
 }
