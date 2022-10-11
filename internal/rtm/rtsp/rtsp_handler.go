@@ -540,7 +540,7 @@ func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
 		r.logger.Errorf("could not find endpoint")
 		return url
 	}
-	url.Host = ep
+	url.Host = fmt.Sprintf("%s:554", ep)
 	r.logger.Debugf("Update url to %v", url)
 	return url
 }
