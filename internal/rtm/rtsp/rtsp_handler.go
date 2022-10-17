@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/aler9/gortsplib/pkg/base"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"google.golang.org/grpc/peer"
 	"log"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/aler9/gortsplib/pkg/base"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	"google.golang.org/grpc/peer"
 )
 
 // called when a connection is opened.
@@ -292,25 +293,33 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		return nil, err
 	}
 
-	// 2. Find stub connection for given path
-	srv, ok := r.stubConn.Load(ep)
+	// 2. Find remote host for endpoint
+	host, err := r.getHostFromEndpoint(ep)
+	if err != nil {
+		r.logger.Errorf("could not find host")
+		// res := &base.Response { bad request or something}
+		return nil, err
+	}
+
+	// 3. Find stub connection for given path
+	srv, ok := r.stubConn.Load(host)
 	if !ok {
 		r.logger.Errorf("could not find stub connection for endpoint")
 		return nil, errors.New("not found")
 	}
 
-	// 3. Check if remote endpoint open RTSP connection
-	if !r.isConnectionOpen(ep) {
-		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", ep)
+	// 4. Check if remote endpoint open RTSP connection
+	if !r.isConnectionOpen(host) {
+		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", host)
 		// Send REQUEST event to server pod
-		_, port, err := net.SplitHostPort(req.URL.Host)
-		if err != nil {
-			r.logger.Errorf("could not split host port")
-			return nil, err
-		}
+		// _, port, err := net.SplitHostPort(req.URL.Host)
+		// if err != nil {
+		// 	r.logger.Errorf("could not split host port")
+		// 	return nil, err
+		// }
 		addMsg := &pb.Message{
 			Event:  pb.Event_REQUEST,
-			Remote: fmt.Sprintf("%s:%s", ep, port),
+			Remote: ep,
 		}
 		srv.(*StubConnection).conn.Send(addMsg)
 
@@ -321,14 +330,14 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		r.logger.Debugf("Remote endpoint RTSP connection open")
 	}
 
-	// 4. Update target to client pod
+	// 5. Update target to client pod
 	messageData := srv.(*StubConnection).data
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
 	}
 	rc.state = Options
-	rc.targetAddr = ep
+	rc.targetAddr = host
 	rc.targetLocal = messageData.Local
 	rc.targetRemote = messageData.Remote
 
@@ -337,7 +346,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		return nil, err
 	}
 	if s_rc.state < Options {
-		// 5. Forward OPTIONS command to sever pod
+		// 6. Forward OPTIONS command to server pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
 		req.URL = r.updateURLIpAddress(req.URL)
 		req.Write(data)
@@ -353,7 +362,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		r.logger.Debugf("waiting on options response")
 		res := <-srv.(*StubConnection).dataCh
 
-		//Update remote RTSTConnection
+		//Update remote RTSP Connection
 		s_rc.state = Options
 		s_rc.response[Options] = res
 		s_rc.responseErr[Options] = err
@@ -393,6 +402,17 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	return res, nil
 }
 
+func (r *RTSP) getHostFromEndpoint(ep string) (string, error) {
+	host, _, err := net.SplitHostPort(ep)
+	if err != nil {
+		return "", errors.New("could not parse host:port")
+	}
+
+	r.logger.Debugf("remote IP to connect: %s", host)
+
+	return host, nil
+}
+
 func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 	urls := r.urlHandler.GetInternalURLs(p.String())
 
@@ -402,13 +422,13 @@ func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 	if err != nil {
 		return "", errors.New("could not parse endpoint")
 	}
-	host, _, err := net.SplitHostPort(ep.Host)
-	if err != nil {
-		return "", errors.New("could not parse host:port")
-	}
+	// host, _, err := net.SplitHostPort(ep.Host)
+	// if err != nil {
+	// 	return "", errors.New("could not parse host:port")
+	// }
 	r.logger.Debugf("endpoint to connect: %s", ep)
 
-	return host, nil
+	return ep.Host, nil
 }
 
 func getRemoteIPv4Address(url string) string {
@@ -540,7 +560,8 @@ func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
 		r.logger.Errorf("could not find endpoint")
 		return url
 	}
-	url.Host = fmt.Sprintf("%s:554", ep)
+	// url.Host = fmt.Sprintf("%s:554", ep)
+	url.Host = ep
 	r.logger.Debugf("Update url to %v", url)
 	return url
 }
