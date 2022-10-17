@@ -22,11 +22,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
@@ -210,8 +211,21 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 	clientEp := getRemoteIPv4Address(s.Remote)
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
 
+	r.logger.Debugf("client EP is %v", clientEp)
+	r.logger.Debugf("server EP is %v", serverEp)
+
 	dataplaneIP, err := node_mapper.MapNode(clientEp)
+
+	if err != nil {
+		nodeEp := getRemoteIPv4Address(s.Local)
+
+		r.logger.Debugf("node EP is %v", nodeEp)
+
+		dataplaneIP, err = node_mapper.MapNode(nodeEp)
+	}
+
 	r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+
 	if err != nil {
 		return err
 	}

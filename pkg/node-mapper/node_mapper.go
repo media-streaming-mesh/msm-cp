@@ -3,15 +3,16 @@ package node_mapper
 import (
 	"context"
 	"fmt"
+	"log"
+	"net"
+	"strings"
+	"sync"
+
 	v12 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"log"
-	"net"
-	"strings"
-	"sync"
 )
 
 var (
@@ -104,8 +105,9 @@ func (mapper *NodeMapper) addNode(node *v12.Node) {
 	//Save ip to hashmap
 	for _, address := range node.Status.Addresses {
 		if address.Type == v12.NodeInternalIP {
-			mapper.log("Store node internal IP %v with key %v", address, key)
+			mapper.log("Store node Internal IP %v with key %v", address.Address, key)
 			NodeMap.Store(key, address.Address)
+			NodeMap.Store(address.Address+"/32", address.Address) // store nodes's own IP in the map
 		}
 	}
 }
