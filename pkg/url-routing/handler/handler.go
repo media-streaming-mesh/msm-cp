@@ -113,7 +113,7 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 		// if ip is not clusterIP, return ip
 		if err != nil {
 			uh.log("unable to look up cluster IP, returning IP given (%s)", addresses[0])
-			return []string{addresses[0] + ":" + port + "/" + path}
+			return []string{addresses[0] + ":" + port}
 		}
 
 		uh.log("ClusterIP's service name is %s", serviceName)
