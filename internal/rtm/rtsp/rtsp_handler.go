@@ -345,6 +345,8 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	if err != nil {
 		return nil, err
 	}
+	r.logger.Debugf("Server state %v", s_rc.state)
+
 	if s_rc.state < Options {
 		// 6. Forward OPTIONS command to server pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
@@ -361,13 +363,14 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		srv.(*StubConnection).conn.Send(optionsMsg)
 		r.logger.Debugf("waiting on options response")
 		res := <-srv.(*StubConnection).dataCh
-
-		//Update remote RTSP Connection
+    
+		// Update remote RTSP Connection
+    r.logger.Debugf("Going to update server state")
 		s_rc.state = Options
 		s_rc.response[Options] = res
 		s_rc.responseErr[Options] = err
 
-		//Log
+		// Log
 		r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
 	}
 
