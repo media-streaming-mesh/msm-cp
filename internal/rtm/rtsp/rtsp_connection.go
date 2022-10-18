@@ -40,6 +40,7 @@ const (
 	Describe                     = 2
 	Setup                        = 3
 	Play                         = 4
+	Teardown                     = 5
 )
 
 func newRTSPConnection(log *logrus.Logger) *RTSPConnection {

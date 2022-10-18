@@ -20,10 +20,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
@@ -33,11 +37,13 @@ import (
 )
 
 type RTSP struct {
-	urlHandler *msm_url.UrlHandler
-	logger     *logrus.Logger
-	methods    []base.Method
-	stubConn   *sync.Map
-	rtspConn   *sync.Map
+	urlHandler   *msm_url.UrlHandler
+	logger       *logrus.Logger
+	methods      []base.Method
+	stubConn     *sync.Map
+	rtspConn     *sync.Map
+	rtspStream   *sync.Map
+	rtspEndpoint *sync.Map
 }
 
 // Option configures NewRTSP
@@ -85,11 +91,13 @@ func NewRTSP(opts ...Option) *RTSP {
 	uHandler.InitializeUrlHandler()
 
 	return &RTSP{
-		urlHandler: uHandler,
-		logger:     cfg.Logger,
-		methods:    cfg.SupportedMethods,
-		stubConn:   new(sync.Map),
-		rtspConn:   new(sync.Map),
+		urlHandler:   uHandler,
+		logger:       cfg.Logger,
+		methods:      cfg.SupportedMethods,
+		stubConn:     new(sync.Map),
+		rtspConn:     new(sync.Map),
+		rtspStream:   new(sync.Map),
+		rtspEndpoint: new(sync.Map),
 	}
 
 }
@@ -162,8 +170,16 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 					Data:   fmt.Sprintf("%s", data),
 				}
 
+				//Send response back to client
 				if err := srv.Send(pbRes); err != nil {
 					r.logger.Errorf("could not send response, error: %v", err)
+				} else {
+					//Update data to proxy
+					if req.Method == base.Setup || req.Method == base.Play {
+						if err := r.SendProxyData(stream); err != nil {
+							r.logger.Errorf("Could not send proxy data %v", err)
+						}
+					}
 				}
 			} else if errRes == nil {
 				// received a server-side response
@@ -177,4 +193,105 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 	}
+}
+
+func (r *RTSP) SendProxyData(s *pb.Message) error {
+
+	// 1. Get client/remote RTSP connection
+	rc, err := r.getClientRTSPConnection(s)
+	if err != nil {
+		return err
+	}
+	s_rc, err := r.getRemoteRTSPConnection(s)
+	if err != nil {
+		return err
+	}
+
+	// 2. Get client/remote endpoint
+	clientEp := getRemoteIPv4Address(s.Remote)
+	serverEp := getRemoteIPv4Address(rc.targetRemote)
+
+	r.logger.Debugf("client EP is %v", clientEp)
+	r.logger.Debugf("server EP is %v", serverEp)
+
+	dataplaneIP, err := node_mapper.MapNode(clientEp)
+
+	if err != nil {
+		nodeEp := getRemoteIPv4Address(s.Local)
+
+		r.logger.Debugf("node EP is %v", nodeEp)
+
+		dataplaneIP, err = node_mapper.MapNode(nodeEp)
+	}
+
+	r.logger.Debugf("msm-proxy ip %v", dataplaneIP)
+
+	if err != nil {
+		return err
+	}
+
+	// 3. Get client/remote ports
+	describeResponse := s_rc.response[Setup]
+	clientPorts := getClientPorts(describeResponse.Header["Transport"])
+	serverPorts := getServerPorts(describeResponse.Header["Transport"])
+
+	r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
+	r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
+
+	//TODO: create GRPC connection to server once
+	grpcClient, err := transport.SetupClient(dataplaneIP)
+	if err != nil {
+		r.logger.Debugf("Failed to connect to server, error %s\n", err)
+	}
+	dpGrpcClient := transport.Client{
+		r.logger,
+		grpcClient,
+	}
+
+	if rc.state == Setup {
+		var streamId uint32
+
+		data, ok := r.rtspStream.Load(serverEp)
+		if ok {
+			streamId = data.(uint32)
+		} else {
+			stream, result := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
+			streamId = stream.Id
+			r.rtspStream.Store(serverEp, streamId)
+			r.logger.Debugf("Create stream %v %v", stream, result)
+		}
+
+		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPorts[0])
+		r.rtspEndpoint.Store(clientEp, streamId)
+		r.logger.Debugf("Created ep %v %v", endpoint, result)
+	}
+
+	if rc.state == Play {
+		streamId, ok := r.rtspStream.Load(serverEp)
+		if !ok {
+			return errors.New("Can't find stream id")
+		}
+		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPorts[0])
+		r.logger.Debugf("Update ep %v %v", endpoint, result)
+	}
+
+	if rc.state == Teardown {
+		streamId, ok := r.rtspStream.Load(serverEp)
+		if !ok {
+			return errors.New("Can't find stream id")
+		}
+		endpoint, result := dpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, clientPorts[0])
+		r.logger.Debugf("Delete ep %v %v", endpoint, result)
+
+		if r.isLastClient(clientEp) {
+			stream, result := dpGrpcClient.DeleteStream(streamId.(uint32), serverEp, serverPorts[0])
+			r.rtspStream.Delete(serverEp)
+			r.logger.Debugf("Delete stream %v %v", stream, result)
+		}
+		r.rtspEndpoint.Delete(clientEp)
+	}
+
+	dpGrpcClient.Close()
+
+	return nil
 }

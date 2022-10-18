@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"fmt"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"net"
 	"os"
 	"os/signal"
@@ -33,7 +34,8 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	rtmImpl rtm.API
+	rtmImpl    rtm.API
+	nodeMapper *node_mapper.NodeMapper
 }
 
 // Start, starts the MSM Control Plane application.

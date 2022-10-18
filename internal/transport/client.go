@@ -30,8 +30,8 @@ type Client struct {
 	GrpcClient *grpcClient
 }
 
-func SetupClient() (*grpcClient, error) {
-	grpcClient, err := newGRPCClient()
+func SetupClient(ip string) (*grpcClient, error) {
+	grpcClient, err := newGRPCClient(ip)
 	grpcClient.start()
 	return grpcClient, err
 }
@@ -61,6 +61,27 @@ func (c *Client) CreateStream(ip string, port uint32) (pb.StreamData, *pb.Stream
 	return req, stream
 }
 
+func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
+	//Prepare DELETE data
+	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
+
+	endpoint := pb.Endpoint{
+		Ip:    ip,
+		Port:  port,
+		Encap: uint32(encap),
+	}
+	req := pb.StreamData{
+		Id:        streamId,
+		Operation: pb.StreamOperation_DELETE,
+		Protocol:  pb.ProxyProtocol_RTP,
+		Endpoint:  &endpoint,
+	}
+
+	//Send data to RTPProxy
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return req, stream
+}
+
 func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
 	//Prepare AddEndpoint data
 	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
@@ -73,6 +94,7 @@ func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	req := pb.StreamData{
 		Id:        streamId,
 		Operation: pb.StreamOperation_ADD_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 	}
 
@@ -90,9 +112,29 @@ func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 	}
 	req := pb.StreamData{
 		Id:        streamId,
-		Operation: pb.StreamOperation_UPDATE,
+		Operation: pb.StreamOperation_UPD_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
 		Enable:    true,
+	}
+
+	//Send data to RTPProxy
+	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
+	return endpoint, stream
+}
+
+func (c *Client) DeleteEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
+	//Prepare AddEndpoint data
+
+	endpoint := pb.Endpoint{
+		Ip:   ip,
+		Port: port,
+	}
+	req := pb.StreamData{
+		Id:        streamId,
+		Operation: pb.StreamOperation_DEL_EP,
+		Protocol:  pb.ProxyProtocol_RTP,
+		Endpoint:  &endpoint,
 	}
 
 	//Send data to RTPProxy
