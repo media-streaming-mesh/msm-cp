@@ -191,8 +191,25 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 
+		// need interleaved request
+		req.URL.Host = "127.0.0.1:554"
+
+		r.logger.Debugf("client header = %v", req.Header)
+
+		// grab client ports
+		hdr := req.Header["Transport"][0]
+		ports := strings.Split(hdr, "=")[1]
+
+		// will need to be able to assign other channel values
+		req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
+
+		r.logger.Debugf("server header = %v", req.Header)
+
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
+
+		// do we need to figure out the SSRC here?
+		res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
@@ -363,9 +380,9 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		srv.(*StubConnection).conn.Send(optionsMsg)
 		r.logger.Debugf("waiting on options response")
 		res := <-srv.(*StubConnection).dataCh
-    
+
 		// Update remote RTSP Connection
-    r.logger.Debugf("Going to update server state")
+		r.logger.Debugf("Going to update server state")
 		s_rc.state = Options
 		s_rc.response[Options] = res
 		s_rc.responseErr[Options] = err
