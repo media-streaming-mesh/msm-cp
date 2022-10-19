@@ -18,6 +18,7 @@ package rtsp
 
 import (
 	"errors"
+
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"

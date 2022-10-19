@@ -191,9 +191,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 
-		// need interleaved request
-		req.URL.Host = "127.0.0.1:554"
-
 		r.logger.Debugf("client header = %v", req.Header)
 
 		// grab client ports
@@ -380,7 +377,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		srv.(*StubConnection).conn.Send(optionsMsg)
 		r.logger.Debugf("waiting on options response")
 		res := <-srv.(*StubConnection).dataCh
-		
+
 		// Update remote RTSP Connection
 		r.logger.Debugf("Going to update server state")
 		s_rc.state = Options

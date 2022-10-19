@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -45,6 +44,7 @@ type RTSP struct {
 	rtspConn     *sync.Map
 	rtspStream   *sync.Map
 	rtspEndpoint *sync.Map
+	rtpPort      *sync.Map
 }
 
 // Option configures NewRTSP
@@ -99,6 +99,7 @@ func NewRTSP(opts ...Option) *RTSP {
 		rtspConn:     new(sync.Map),
 		rtspStream:   new(sync.Map),
 		rtspEndpoint: new(sync.Map),
+		rtpPort:      new(sync.Map),
 	}
 
 }
@@ -158,13 +159,6 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 				return err
 			} else if errReq == nil {
 				// received a client-side request
-
-				// this is a total hack!   Need to pass something more than just RTSP messages around (e.g. IPs/ports/etc.)
-				// grab client port
-				hdr := req.Header["Transport"][0]
-				ports := strings.Split(hdr, "=")[1]
-				port, _ := strconv.ParseUint(strings.Split(ports, "-")[0], 10, 32)
-				r.logger.Debugf("Hack port %v", port)
 
 				pbMsg, err := r.handleRequest(req, stream)
 				if err != nil {
@@ -240,15 +234,6 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		return err
 	}
 
-	// // 3. Get client/remote ports
-	// these need to be assigned by controller - not stub or app
-	describeResponse := s_rc.response[Setup]
-	clientPorts := getClientPorts(describeResponse.Header["Transport"])
-	serverPorts := getServerPorts(describeResponse.Header["Transport"])
-
-	r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
-	r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
-
 	//TODO: create GRPC connection to server once
 	grpcClient, err := transport.SetupClient(dataplaneIP)
 	if err != nil {
@@ -261,6 +246,15 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 
 	if rc.state == Setup {
 		var streamId uint32
+
+		// // 3. Get client/remote ports
+		// these need to be assigned by controller - not stub or app
+		describeResponse := s_rc.response[Setup]
+		clientPorts := getClientPorts(describeResponse.Header["Transport"])
+		serverPorts := getServerPorts(describeResponse.Header["Transport"])
+
+		r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
+		r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
 
 		data, ok := r.rtspStream.Load(serverEp)
 		if ok {
@@ -275,6 +269,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 
 		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPorts[0])
 		r.rtspEndpoint.Store(clientEp, streamId)
+		r.rtpPort.Store(clientEp, clientPorts[0])
 		r.logger.Debugf("Created ep %v %v", endpoint, result)
 	}
 
@@ -283,7 +278,10 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		if !ok {
 			return errors.New("Can't find stream id")
 		}
-		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPorts[0])
+
+		clientPort, _ := r.rtpPort.Load(clientEp)
+
+		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPort.(uint32))
 		r.logger.Debugf("Update ep %v %v", endpoint, result)
 	}
 
@@ -292,7 +290,10 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		if !ok {
 			return errors.New("Can't find stream id")
 		}
-		endpoint, result := dpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, clientPorts[0])
+
+		clientPort, _ := r.rtpPort.Load(clientEp)
+
+		endpoint, result := dpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, clientPort.(uint32))
 		r.logger.Debugf("Delete ep %v %v", endpoint, result)
 
 		if r.isLastClient(clientEp) {
@@ -301,6 +302,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 			r.logger.Debugf("Delete stream %v %v", stream, result)
 		}
 		r.rtspEndpoint.Delete(clientEp)
+		r.rtpPort.Delete(clientEp)
 	}
 
 	dpGrpcClient.Close()
