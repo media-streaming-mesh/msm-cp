@@ -137,7 +137,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 
 		case pb.Event_ADD:
 			r.logger.Debugf("Received ADD event: %v", stream)
-			r.OnConnOpen(stream)
+			r.OnConnOpen(srv, stream)
 
 		case pb.Event_DELETE:
 			r.logger.Debugf("Received DELETE event: %v", stream)
@@ -213,6 +213,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 
 	// 2. Get client/remote endpoint
 	clientEp := getRemoteIPv4Address(s.Remote)
+	clientPort, _ := r.rtpPort.Load(clientEp)
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
 
 	r.logger.Debugf("client EP is %v", clientEp)
@@ -250,10 +251,9 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		// // 3. Get client/remote ports
 		// these need to be assigned by controller - not stub or app
 		describeResponse := s_rc.response[Setup]
-		clientPorts := getClientPorts(describeResponse.Header["Transport"])
 		serverPorts := getServerPorts(describeResponse.Header["Transport"])
 
-		r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
+		r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPort)
 		r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
 
 		data, ok := r.rtspStream.Load(serverEp)
@@ -267,9 +267,8 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 			r.logger.Debugf("Create stream %v %v", stream, result)
 		}
 
-		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPorts[0])
+		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPort.(uint32))
 		r.rtspEndpoint.Store(clientEp, streamId)
-		r.rtpPort.Store(clientEp, clientPorts[0])
 		r.logger.Debugf("Created ep %v %v", endpoint, result)
 	}
 
@@ -278,8 +277,6 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		if !ok {
 			return errors.New("Can't find stream id")
 		}
-
-		clientPort, _ := r.rtpPort.Load(clientEp)
 
 		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPort.(uint32))
 		r.logger.Debugf("Update ep %v %v", endpoint, result)
