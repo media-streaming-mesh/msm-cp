@@ -380,7 +380,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		srv.(*StubConnection).conn.Send(optionsMsg)
 		r.logger.Debugf("waiting on options response")
 		res := <-srv.(*StubConnection).dataCh
-
+		
 		// Update remote RTSP Connection
 		r.logger.Debugf("Going to update server state")
 		s_rc.state = Options

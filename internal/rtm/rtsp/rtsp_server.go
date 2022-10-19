@@ -164,6 +164,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 				hdr := req.Header["Transport"][0]
 				ports := strings.Split(hdr, "=")[1]
 				port, _ := strconv.ParseUint(strings.Split(ports, "-")[0], 10, 32)
+				r.logger.Debugf("Hack port %v", port)
 
 				pbMsg, err := r.handleRequest(req, stream)
 				if err != nil {
@@ -184,7 +185,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 				} else {
 					//Update data to proxy
 					if req.Method == base.Setup || req.Method == base.Play {
-						if err := r.SendProxyData(stream, port); err != nil {
+						if err := r.SendProxyData(stream); err != nil {
 							r.logger.Errorf("Could not send proxy data %v", err)
 						}
 					}
@@ -203,7 +204,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 	}
 }
 
-func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
+func (r *RTSP) SendProxyData(s *pb.Message) error {
 
 	// 1. Get client/remote RTSP connection
 	rc, err := r.getClientRTSPConnection(s)
@@ -211,10 +212,10 @@ func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
 		return err
 	}
 
-	// s_rc, err := r.getRemoteRTSPConnection(s)
-	// if err != nil {
-	//	return err
-	// }
+	s_rc, err := r.getRemoteRTSPConnection(s)
+	if err != nil {
+		return err
+	}
 
 	// 2. Get client/remote endpoint
 	clientEp := getRemoteIPv4Address(s.Remote)
@@ -241,12 +242,12 @@ func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
 
 	// // 3. Get client/remote ports
 	// these need to be assigned by controller - not stub or app
-	// describeResponse := s_rc.response[Setup]
-	// clientPorts := getClientPorts(describeResponse.Header["Transport"])
-	// serverPorts := getServerPorts(describeResponse.Header["Transport"])
+	describeResponse := s_rc.response[Setup]
+	clientPorts := getClientPorts(describeResponse.Header["Transport"])
+	serverPorts := getServerPorts(describeResponse.Header["Transport"])
 
-	// r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
-	// r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
+	r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPorts)
+	r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
 
 	//TODO: create GRPC connection to server once
 	grpcClient, err := transport.SetupClient(dataplaneIP)
@@ -266,13 +267,13 @@ func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
 			streamId = data.(uint32)
 		} else {
 			// need to add ports for multiple sessions
-			stream, result := dpGrpcClient.CreateStream(serverEp, 8050)
+			stream, result := dpGrpcClient.CreateStream(serverEp, serverPorts[0])
 			streamId = stream.Id
 			r.rtspStream.Store(serverEp, streamId)
 			r.logger.Debugf("Create stream %v %v", stream, result)
 		}
 
-		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, port)
+		endpoint, result := dpGrpcClient.CreateEndpoint(streamId, clientEp, clientPorts[0])
 		r.rtspEndpoint.Store(clientEp, streamId)
 		r.logger.Debugf("Created ep %v %v", endpoint, result)
 	}
@@ -282,7 +283,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
 		if !ok {
 			return errors.New("Can't find stream id")
 		}
-		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, port)
+		endpoint, result := dpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPorts[0])
 		r.logger.Debugf("Update ep %v %v", endpoint, result)
 	}
 
@@ -291,7 +292,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, port uint32) error {
 		if !ok {
 			return errors.New("Can't find stream id")
 		}
-		endpoint, result := dpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, port)
+		endpoint, result := dpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, clientPorts[0])
 		r.logger.Debugf("Delete ep %v %v", endpoint, result)
 
 		if r.isLastClient(clientEp) {
