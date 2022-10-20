@@ -61,8 +61,32 @@ func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
 	r.logger.Infof("Connection for client: %s successfully registered", remoteAddr)
 }
 
+func (r *RTSP) OnExternalClientRegistration(server pb.MsmControlPlane_SendServer, remoteAddr string) *StubConnection {
+	sc := &StubConnection{
+		conn:   server,
+		addCh:  make(chan *pb.Message, 1),
+		dataCh: make(chan *base.Response, 1),
+	}
+
+	//Send node ip address to stub
+	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
+	r.logger.Debugf("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
+	if err == nil {
+		configMsg := &pb.Message{
+			Event:  pb.Event_CONFIG,
+			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
+		}
+		sc.conn.Send(configMsg)
+	}
+
+	// save stub connection on a sync.Map
+	r.stubConn.Store(remoteAddr, sc)
+	r.logger.Infof("Connection for external client: %s successfully registered", remoteAddr)
+	return sc
+}
+
 // called when a connection is opened.
-func (r *RTSP) OnConnOpen(msg *pb.Message) {
+func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
 
 	// create a new RTSP connection and store it
 	sc := newRTSPConnection(r.logger)
@@ -74,8 +98,8 @@ func (r *RTSP) OnConnOpen(msg *pb.Message) {
 
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
-		r.logger.Errorf("stub connection was not found!")
-		return
+		r.logger.Errorf("stub connection was not found! %v", stubAddr)
+		srv = r.OnExternalClientRegistration(server, stubAddr)
 	}
 	srv.(*StubConnection).data = *msg
 	srv.(*StubConnection).addCh <- msg
@@ -102,7 +126,7 @@ func (r *RTSP) OnConnClose(msg *pb.Message) {
 		stubAddr := getRemoteIPv4Address(msg.Remote)
 		srv, ok := r.stubConn.Load(stubAddr)
 		if !ok {
-			r.logger.Errorf("stub connection was not found!")
+			r.logger.Errorf("stub connection was not found! %v", stubAddr)
 			return
 		}
 		r.logger.Infof("Unblock write channel for %v", msg.Remote)
@@ -187,6 +211,11 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 	if error != nil {
 		return nil, error
 	}
+
+	// store client ports
+	clientPorts := getClientPorts(req.Header["Transport"])
+	clientEp := getRemoteIPv4Address(s.Remote)
+	r.rtpPort.Store(clientEp, clientPorts[0])
 
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
