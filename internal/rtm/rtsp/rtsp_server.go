@@ -141,7 +141,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 
 		case pb.Event_DELETE:
 			r.logger.Debugf("Received DELETE event: %v", stream)
-			r.OnConnClose(stream)
+			r.OnConnClose(srv, stream)
 
 		case pb.Event_DATA:
 			r.logger.Debugf("Received DATA event: %v", stream)
