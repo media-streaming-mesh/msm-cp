@@ -1,10 +1,10 @@
-name: msm-cp
+name: pull-request-image
 
 on:
   pull_request:
   push:
     branches:
-      - ${{ env.BRANCH }}
+      - main
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
 
