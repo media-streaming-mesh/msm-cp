@@ -2,7 +2,7 @@ name: Build production image
 
 on:
   pull_request_review:
-    types: [submitted]:
+    types: [submitted]
   push:
     branches:
       - main
