@@ -8,10 +8,11 @@ import (
 )
 
 type StubConnection struct {
-	conn   pb.MsmControlPlane_SendServer
-	data   pb.Message
-	addCh  chan *pb.Message
-	dataCh chan *base.Response
+	conn    pb.MsmControlPlane_SendServer
+	data    pb.Message
+	addCh   chan *pb.Message
+	dataCh  chan *base.Response
+	clients map[string]string
 }
 
 type RTPProxyConnection struct {

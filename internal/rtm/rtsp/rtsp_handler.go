@@ -40,9 +40,10 @@ func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
 	remoteAddr, _, _ := net.SplitHostPort(p.Addr.String())
 
 	sc := &StubConnection{
-		conn:   server,
-		addCh:  make(chan *pb.Message, 1),
-		dataCh: make(chan *base.Response, 1),
+		conn:    server,
+		addCh:   make(chan *pb.Message, 1),
+		dataCh:  make(chan *base.Response, 1),
+		clients: make(map[string]string),
 	}
 
 	//Send node ip address to stub
@@ -61,30 +62,6 @@ func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
 	r.logger.Infof("Connection for client: %s successfully registered", remoteAddr)
 }
 
-func (r *RTSP) OnExternalClientRegistration(server pb.MsmControlPlane_SendServer, remoteAddr string) *StubConnection {
-	sc := &StubConnection{
-		conn:   server,
-		addCh:  make(chan *pb.Message, 1),
-		dataCh: make(chan *base.Response, 1),
-	}
-
-	//Send node ip address to stub
-	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
-	r.logger.Debugf("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
-	if err == nil {
-		configMsg := &pb.Message{
-			Event:  pb.Event_CONFIG,
-			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
-		}
-		sc.conn.Send(configMsg)
-	}
-
-	// save stub connection on a sync.Map
-	r.stubConn.Store(remoteAddr, sc)
-	r.logger.Infof("Connection for external client: %s successfully registered", remoteAddr)
-	return sc
-}
-
 // called when a connection is opened.
 func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
 
@@ -95,20 +72,22 @@ func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message)
 
 	key := getRTSPConnectionKey(msg.Local, msg.Remote)
 	r.rtspConn.Store(key, sc)
+	r.logger.Infof("RTSP connection key %v", key)
+	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
 
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
 		r.logger.Errorf("stub connection was not found! %v", stubAddr)
-		srv = r.OnExternalClientRegistration(server, stubAddr)
+		r.OnExternalClientConnOpen(server, msg)
+		return
 	}
 	srv.(*StubConnection).data = *msg
 	srv.(*StubConnection).addCh <- msg
-	r.logger.Infof("RTSP connection key %v", key)
-	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
+	r.logger.Infof("StubConnection open channel %v", msg)
 }
 
 // called when a connection is close.
-func (r *RTSP) OnConnClose(msg *pb.Message) {
+func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
 	//update rtsp state
 	rc, _ := r.getClientRTSPConnection(msg)
 	if rc.state != Teardown {
@@ -125,12 +104,13 @@ func (r *RTSP) OnConnClose(msg *pb.Message) {
 	if rc.targetAddr != "" {
 		stubAddr := getRemoteIPv4Address(msg.Remote)
 		srv, ok := r.stubConn.Load(stubAddr)
-		if !ok {
+		if ok {
+			r.logger.Infof("Unblock write channel for %v", msg.Remote)
+			<-srv.(*StubConnection).addCh
+		} else {
 			r.logger.Errorf("stub connection was not found! %v", stubAddr)
-			return
+			r.OnExternalClientConnClose(server, stubAddr)
 		}
-		r.logger.Infof("Unblock write channel for %v", msg.Remote)
-		<-srv.(*StubConnection).addCh
 	}
 
 	// find RTSP connection and delete it
@@ -138,6 +118,46 @@ func (r *RTSP) OnConnClose(msg *pb.Message) {
 	r.rtspConn.Delete(key)
 
 	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
+}
+
+func (r *RTSP) OnExternalClientConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
+	// get remote ip addr
+	ctx := server.Context()
+	p, _ := peer.FromContext(ctx)
+	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
+	remoteAddr := getRemoteIPv4Address(msg.Remote)
+
+	srv, ok := r.stubConn.Load(stubAddr)
+	if !ok {
+		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
+		return
+	}
+	srv.(*StubConnection).clients[remoteAddr] = remoteAddr
+
+	key := getRTSPConnectionKey(msg.Local, msg.Remote)
+	rc, ok := r.rtspConn.Load(key)
+	if ok {
+		messageData := srv.(*StubConnection).data
+		rc.(*RTSPConnection).targetLocal = messageData.Local
+		rc.(*RTSPConnection).targetRemote = messageData.Remote
+	}
+
+	r.logger.Infof("Connection for external client: %s successfully open", remoteAddr)
+}
+
+func (r *RTSP) OnExternalClientConnClose(server pb.MsmControlPlane_SendServer, remoteAddr string) {
+	// get remote ip addr
+	ctx := server.Context()
+	p, _ := peer.FromContext(ctx)
+	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
+
+	srv, ok := r.stubConn.Load(stubAddr)
+	if !ok {
+		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
+		return
+	}
+	delete(srv.(*StubConnection).clients, remoteAddr)
+	r.logger.Infof("Connection for external client: %s successfully close", remoteAddr)
 }
 
 // called when a session is opened.
