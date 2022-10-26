@@ -2,12 +2,7 @@ name: build-pull-request-image
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
-
+    types: [opened, reopened]
 jobs:
   msm-dp:
     name: msm-cp
