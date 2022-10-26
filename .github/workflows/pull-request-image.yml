@@ -27,4 +27,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Build Container and Push to Docker Hub
-        run: docker buildx build --push --platform linux/amd64,linux/arm64 -t ciscolabs/msm-controller:${{ env.BRANCH }} .
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/msm-controller:${{ env.BRANCH }}
+          build-args: |
+            BRANCH=${{ env.BRANCH }}
