@@ -297,6 +297,16 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 	return s_rc.response[Play], s_rc.responseErr[Play]
 }
 
+// called after receiving a PAUSE request.
+func (r *RTSP) OnPause(req *base.Request, s *pb.Message) (*base.Response, error) {
+	r.logger.Debugf("[c->s] %+v", req)
+
+	res, err := r.clientToServer(req, s)
+	r.logger.Debugf("[s->c] PAUSE RESPONSE %+v", res)
+
+	return res, err
+}
+
 // called after receiving a RECORD request.
 func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 	log.Printf("record request")
