@@ -242,12 +242,13 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 
 		r.logger.Debugf("client header = %v", req.Header)
 
+		//TODO: handle external clients
 		// grab client ports
-		hdr := req.Header["Transport"][0]
-		ports := strings.Split(hdr, "=")[1]
+		//hdr := req.Header["Transport"][0]
+		//ports := strings.Split(hdr, "=")[1]
 
 		// will need to be able to assign other channel values
-		req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
+		//req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
 
 		r.logger.Debugf("server header = %v", req.Header)
 
@@ -255,7 +256,7 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
 
 		// do we need to figure out the SSRC here?
-		res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
+		//res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy

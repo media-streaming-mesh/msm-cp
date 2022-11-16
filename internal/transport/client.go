@@ -4,7 +4,6 @@ import (
 	"context"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/sirupsen/logrus"
-	"strconv"
 	"sync"
 )
 
@@ -24,6 +23,10 @@ func (si *StreamId) ID() (id uint32) {
 	return
 }
 
+func GetStreamID() uint32 {
+	return streamId.ID()
+}
+
 // Client holds the client specific data structures
 type Client struct {
 	Log        *logrus.Logger
@@ -40,17 +43,15 @@ func (c *Client) Close() {
 	c.GrpcClient.close()
 }
 
-func (c *Client) CreateStream(ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
+func (c *Client) CreateStream(id uint32, endpointEncap pb.Encap, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
 	//Prepare CREATE data
-	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
-
 	endpoint := pb.Endpoint{
 		Ip:    ip,
 		Port:  port,
-		Encap: uint32(encap),
+		Encap: uint32(endpointEncap),
 	}
 	req := pb.StreamData{
-		Id:        streamId.ID(),
+		Id:        id,
 		Operation: pb.StreamOperation_CREATE,
 		Protocol:  pb.ProxyProtocol_RTP,
 		Endpoint:  &endpoint,
@@ -63,12 +64,9 @@ func (c *Client) CreateStream(ip string, port uint32) (pb.StreamData, *pb.Stream
 
 func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
 	//Prepare DELETE data
-	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
-
 	endpoint := pb.Endpoint{
-		Ip:    ip,
-		Port:  port,
-		Encap: uint32(encap),
+		Ip:   ip,
+		Port: port,
 	}
 	req := pb.StreamData{
 		Id:        streamId,
@@ -82,14 +80,12 @@ func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.Strea
 	return req, stream
 }
 
-func (c *Client) CreateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
+func (c *Client) CreateEndpoint(streamId uint32, endpointEncap pb.Encap, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
 	//Prepare AddEndpoint data
-	encap, _ := strconv.ParseUint(pb.Encap_RTP_UDP.String(), 10, 32)
-
 	endpoint := pb.Endpoint{
 		Ip:    ip,
 		Port:  port,
-		Encap: uint32(encap),
+		Encap: uint32(endpointEncap),
 	}
 	req := pb.StreamData{
 		Id:        streamId,
