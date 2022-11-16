@@ -239,24 +239,25 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
-
 		r.logger.Debugf("client header = %v", req.Header)
 
-		//TODO: handle external clients
-		// grab client ports
-		//hdr := req.Header["Transport"][0]
-		//ports := strings.Split(hdr, "=")[1]
-
-		// will need to be able to assign other channel values
-		//req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
-
-		r.logger.Debugf("server header = %v", req.Header)
+		interleaved := isInterleaved(req.Header["Transport"])
+		if interleaved == false {
+			// will need to be able to assign other channel values
+			req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
+			r.logger.Debugf("server header = %v", req.Header)
+		}
 
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
 
-		// do we need to figure out the SSRC here?
-		//res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
+		if interleaved == false {
+			// grab client ports
+			hdr := req.Header["Transport"][0]
+			ports := strings.Split(hdr, "=")[1]
+			// do we need to figure out the SSRC here?
+			res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
+		}
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
@@ -629,6 +630,20 @@ func getServerPorts(value base.HeaderValue) []uint32 {
 		}
 	}
 	return ports
+}
+
+func isInterleaved(value base.HeaderValue) bool {
+	var interleaved = false
+	for _, transportValue := range value {
+		transportValues := strings.Split(transportValue, ";")
+		for _, transportL2Value := range transportValues {
+			if strings.Contains(transportL2Value, "interleaved") {
+				interleaved = true
+				break
+			}
+		}
+	}
+	return interleaved
 }
 
 func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
