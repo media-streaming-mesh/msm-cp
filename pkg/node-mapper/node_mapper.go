@@ -62,6 +62,19 @@ func MapNode(ip string) (string, error) {
 	return "", fmt.Errorf("Can't get node ip")
 }
 
+func IsOnSameNode(ip string, ip2 string) bool {
+	nodeIp, err := MapNode(ip)
+	node2Ip, err2 := MapNode(ip2)
+
+	if err != nil || err2 != nil {
+		return false
+	}
+	if nodeIp != node2Ip {
+		return false
+	}
+	return true
+}
+
 func (mapper *NodeMapper) watchNode() {
 	watcher, err := mapper.clientset.CoreV1().Nodes().Watch(context.TODO(), v1.ListOptions{})
 	if err != nil {

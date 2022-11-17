@@ -75,6 +75,15 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 
 			return res, err
 		}
+	case base.Pause:
+		if sxID != "" {
+			res, err := r.OnPause(req, s)
+			if err != nil {
+				return nil, err
+			}
+
+			return res, err
+		}
 	case base.Record:
 		if sxID != "" {
 			res, err := r.OnRecord(req)
