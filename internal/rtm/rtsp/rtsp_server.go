@@ -298,7 +298,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 				r.rtspStream.Store(serverEp, streamId)
 				r.logger.Debugf("Create stream %v result %v", stream, result)
 
-				stream2, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_QUIC_DGRAM, serverProxyIP, serverPorts[0])
+				stream2, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
 				r.logger.Debugf("Create stream2 %v result %v", stream2, result)
 				r.logger.Debugf("stream2 ep encap %v", stream2.Endpoint.Encap)
 
@@ -310,7 +310,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("Created ep %v result %v", endpoint, result)
 
 		if !isOnSameNode {
-			endpoint, result := serverDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_QUIC_DGRAM, clientProxyIP, clientPort.(uint32))
+			endpoint, result := serverDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_UDP, clientProxyIP, clientPort.(uint32))
 			r.rtspEndpoint.Store(clientEp, streamId)
 			r.logger.Debugf("Created ep %v result %v", endpoint, result)
 			r.logger.Debugf("Endpoint encap %v", endpoint.Encap)
