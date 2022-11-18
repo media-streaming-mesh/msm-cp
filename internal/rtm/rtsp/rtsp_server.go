@@ -282,8 +282,8 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("client endpoint/ports %v %v", clientEp, clientPort)
 		r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
 
-		data, ok := r.rtspStream.Load(serverEp)
-		if ok {
+		data, _ := r.rtspStream.Load(serverEp)
+		if data != nil {
 			streamId = data.(uint32)
 		} else {
 			streamId = transport.GetStreamID()

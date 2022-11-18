@@ -384,7 +384,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	}
 
 	// 4. Check if remote endpoint open RTSP connection
-	if !r.isConnectionOpen(host) {
+	if !r.isConnectionOpen(host, s) {
 		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", host)
 		// Send REQUEST event to server pod
 		// _, port, err := net.SplitHostPort(req.URL.Host)
@@ -521,9 +521,15 @@ func getRTSPConnectionKey(s1, s2 string) string {
 	return fmt.Sprintf("%s%s", s1, s2)
 }
 
-func (r *RTSP) isConnectionOpen(ep string) bool {
+func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 	r.logger.Debugf("Check RTSP connection for endpoint %s", ep)
 	check := false
+
+	_, err := r.getRemoteRTSPConnection(s)
+	if err != nil {
+		return false
+	}
+
 	r.rtspConn.Range(func(key, value interface{}) bool {
 		r.logger.Debugf("RTSP connection targetAddress %s", value.(*RTSPConnection).targetAddr)
 		r.logger.Debugf("RTSP connection localAddress %s", value.(*RTSPConnection).targetLocal)
