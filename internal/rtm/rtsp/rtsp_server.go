@@ -310,7 +310,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("Created ep %v result %v", endpoint, result)
 
 		if !isOnSameNode {
-			endpoint, result := serverDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_UDP, clientProxyIP, clientPort.(uint32))
+			endpoint, result := serverDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_UDP, clientProxyIP, 8050)
 			r.rtspEndpoint.Store(clientEp, streamId)
 			r.logger.Debugf("Created ep %v result %v", endpoint, result)
 			r.logger.Debugf("Endpoint encap %v", endpoint.Encap)
@@ -327,7 +327,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("Update ep %v %v", endpoint, result)
 
 		if !isOnSameNode {
-			endpoint2, result := serverDpGrpcClient.UpdateEndpoint(streamId.(uint32), clientProxyIP, clientPort.(uint32))
+			endpoint2, result := serverDpGrpcClient.UpdateEndpoint(streamId.(uint32), clientProxyIP, 8050)
 			r.logger.Debugf("Update ep %v %v", endpoint2, result)
 		}
 	}
@@ -344,7 +344,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("Delete ep %v %v", endpoint, result)
 
 		if !isOnSameNode {
-			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(streamId.(uint32), clientProxyIP, clientPort.(uint32))
+			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(streamId.(uint32), clientProxyIP, 8050)
 			r.logger.Debugf("Delete ep %v %v", endpoint2, result)
 		}
 
