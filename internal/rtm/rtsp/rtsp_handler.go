@@ -468,7 +468,7 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
 
-	r.logger.Debugf("Sending data from client %v to server", stubAddr)
+	r.logger.Debugf("Sending data from client to server %v", stubAddr)
 	srv.(*StubConnection).conn.Send(&pb.Message{
 		Event:  pb.Event_DATA,
 		Local:  sc.(*RTSPConnection).targetLocal,
@@ -476,7 +476,10 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 		Data:   fmt.Sprintf("%s", data),
 	})
 
+	r.logger.Debugf("Sent data to server")
+
 	res := <-srv.(*StubConnection).dataCh
+
 	return res, nil
 }
 

@@ -53,6 +53,14 @@ func New() *Cfg {
 	flag.Parse()
 
 	cf.Logger = logrus.New()
+
+	cf.Logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:     true,
+		DisableColors:   false,
+		FullTimestamp:   true,
+		TimestampFormat: "2006-01-02 15:04:05.123",
+	})
+
 	cf.Logger.Level = logrus.Level(*logLevel)
 
 	return &Cfg{
