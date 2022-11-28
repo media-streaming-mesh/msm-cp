@@ -332,13 +332,18 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	clientEp := getRemoteIPv4Address(s.Remote)
-	isLastClient := r.isLastClient(clientEp)
-	//update rtsp state
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
 	}
+
+	serverEp := getRemoteIPv4Address(rc.targetRemote)
+	data, _ := r.rtspStream.Load(serverEp)
+	if data == nil {
+		return nil, errors.New("Can't find RTSP stream")
+	}
+
+	//update rtsp state
 	rc.state = Teardown
 
 	//Send DELETE_EP to msm-proxy for last client
@@ -347,7 +352,7 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 
 	//Send TEARDOWN to server if last client
-	if isLastClient {
+	if len(data.(RTSPStream).clients) == 0 {
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
@@ -545,24 +550,18 @@ func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 	return check
 }
 
-func (r *RTSP) isLastClient(ep string) bool {
-	streamId, ok := r.rtspEndpoint.Load(ep)
-	if !ok {
-		return false
-	}
-
-	var epCount = 0
-	r.rtspEndpoint.Range(func(ep, sId interface{}) bool {
-		if sId.(uint32) == streamId.(uint32) {
-			epCount += 1
+func (r *RTSP) clientCount(clientEp string) int {
+	var count = 0
+	r.rtspStream.Range(func(serverEp, rtspStream interface{}) bool {
+		clients := rtspStream.(RTSPStream).clients
+		for _, c := range clients {
+			if c == clientEp {
+				count = len(clients)
+			}
 		}
 		return true
 	})
-	r.logger.Debugf("RTSP client ep count %v", epCount)
-	if epCount == 1 {
-		return true
-	}
-	return false
+	return count
 }
 
 func (r *RTSP) getClientRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
@@ -589,6 +588,18 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 		return nil, errors.New("Can't find server RTSP connection")
 	}
 	return s_rc.(*RTSPConnection), nil
+}
+
+func (r *RTSP) getStubAddress(ep string) string {
+	var stubAddress = ""
+	r.stubConn.Range(func(key, srv interface{}) bool {
+		value := srv.(*StubConnection).clients[ep]
+		if value == ep {
+			stubAddress = key.(string)
+		}
+		return true
+	})
+	return stubAddress
 }
 
 func getClientPorts(value base.HeaderValue) []uint32 {

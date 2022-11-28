@@ -38,14 +38,19 @@ import (
 )
 
 type RTSP struct {
-	urlHandler   *msm_url.UrlHandler
-	logger       *logrus.Logger
-	methods      []base.Method
-	stubConn     *sync.Map
-	rtspConn     *sync.Map
-	rtspStream   *sync.Map
-	rtspEndpoint *sync.Map
-	rtpPort      *sync.Map
+	urlHandler *msm_url.UrlHandler
+	logger     *logrus.Logger
+	methods    []base.Method
+	stubConn   *sync.Map
+	rtspConn   *sync.Map
+	rtspStream *sync.Map
+	rtpPort    *sync.Map
+}
+
+type RTSPStream struct {
+	streamID              uint32
+	proxy_proxy_con_state RTSPConnectionState
+	clients               []string
 }
 
 // Option configures NewRTSP
@@ -93,14 +98,13 @@ func NewRTSP(opts ...Option) *RTSP {
 	uHandler.InitializeUrlHandler()
 
 	return &RTSP{
-		urlHandler:   uHandler,
-		logger:       cfg.Logger,
-		methods:      cfg.SupportedMethods,
-		stubConn:     new(sync.Map),
-		rtspConn:     new(sync.Map),
-		rtspStream:   new(sync.Map),
-		rtspEndpoint: new(sync.Map),
-		rtpPort:      new(sync.Map),
+		urlHandler: uHandler,
+		logger:     cfg.Logger,
+		methods:    cfg.SupportedMethods,
+		stubConn:   new(sync.Map),
+		rtspConn:   new(sync.Map),
+		rtspStream: new(sync.Map),
+		rtpPort:    new(sync.Map),
 	}
 
 }
@@ -220,13 +224,20 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 	// 2. Get client/remote endpoint
 	clientEp := getRemoteIPv4Address(s.Remote)
 	clientPort, _ := r.rtpPort.Load(clientEp)
+	if clientPort == nil {
+		return errors.New("Client ports is nil")
+	}
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
 
 	r.logger.Debugf("client EP is %v", clientEp)
 	r.logger.Debugf("server EP is %v", serverEp)
 
+	endpoint := r.getStubAddress(clientEp)
+	if endpoint == "" {
+		endpoint = clientEp
+	}
 	//Check if client/server on same node
-	isOnSameNode := node_mapper.IsOnSameNode(clientEp, serverEp)
+	isOnSameNode := node_mapper.IsOnSameNode(endpoint, serverEp)
 
 	clientProxyIP, err = node_mapper.MapNode(clientEp)
 	if err != nil {
@@ -272,7 +283,7 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 	}
 
 	if rc.state == Setup {
-		var streamId uint32
+		var rtspStream RTSPStream
 
 		// // 3. Get client/remote ports
 		// these need to be assigned by controller - not stub or app
@@ -283,86 +294,106 @@ func (r *RTSP) SendProxyData(s *pb.Message) error {
 		r.logger.Debugf("server endpoint/ports %v %v", serverEp, serverPorts)
 
 		data, _ := r.rtspStream.Load(serverEp)
-		if data != nil {
-			streamId = data.(uint32)
-		} else {
-			streamId = transport.GetStreamID()
+		if data == nil {
+			streamId := transport.GetStreamID()
 			if isOnSameNode {
 				stream, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverEp, serverPorts[0])
-				streamId = stream.Id
-				r.rtspStream.Store(serverEp, streamId)
+				rtspStream = RTSPStream{
+					streamID:              streamId,
+					proxy_proxy_con_state: Create,
+				}
+				r.rtspStream.Store(serverEp, rtspStream)
 				r.logger.Debugf("Create stream %v result %v", stream, result)
 			} else {
 				stream, result := serverDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverEp, serverPorts[0])
-				streamId = stream.Id
-				r.rtspStream.Store(serverEp, streamId)
+				rtspStream = RTSPStream{
+					streamID:              streamId,
+					proxy_proxy_con_state: Create,
+				}
+				r.rtspStream.Store(serverEp, rtspStream)
 				r.logger.Debugf("Create stream %v result %v", stream, result)
 
 				stream2, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
 				r.logger.Debugf("Create stream2 %v result %v", stream2, result)
-				r.logger.Debugf("stream2 ep encap %v", stream2.Endpoint.Encap)
 
 			}
+		} else {
+			rtspStream = data.(RTSPStream)
 		}
 
-		endpoint, result := clientDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_UDP, clientEp, clientPort.(uint32))
-		r.rtspEndpoint.Store(clientEp, streamId)
+		if !isOnSameNode && rtspStream.proxy_proxy_con_state < Setup {
+			endpoint, result := serverDpGrpcClient.CreateEndpoint(rtspStream.streamID, pb_dp.Encap_RTP_UDP, clientProxyIP, 8050)
+			rtspStream.proxy_proxy_con_state = Setup
+			r.logger.Debugf("Created ep %v result %v", endpoint, result)
+		}
+
+		endpoint, result := clientDpGrpcClient.CreateEndpoint(rtspStream.streamID, pb_dp.Encap_RTP_UDP, clientEp, clientPort.(uint32))
+		rtspStream.clients = append(rtspStream.clients, clientEp)
 		r.logger.Debugf("Created ep %v result %v", endpoint, result)
 
-		if !isOnSameNode {
-			endpoint, result := serverDpGrpcClient.CreateEndpoint(streamId, pb_dp.Encap_RTP_UDP, clientProxyIP, 8050)
-			r.rtspEndpoint.Store(clientEp, streamId)
-			r.logger.Debugf("Created ep %v result %v", endpoint, result)
-			r.logger.Debugf("Endpoint encap %v", endpoint.Encap)
-		}
 	}
 
 	if rc.state == Play {
-		streamId, ok := r.rtspStream.Load(serverEp)
-		if !ok {
-			return errors.New("Can't find stream id")
+		data, _ := r.rtspStream.Load(serverEp)
+		if data == nil {
+			return errors.New("Can't find stream")
 		}
 
-		endpoint, result := clientDpGrpcClient.UpdateEndpoint(streamId.(uint32), clientEp, clientPort.(uint32))
+		rtspStream := data.(RTSPStream)
+		endpoint, result := clientDpGrpcClient.UpdateEndpoint(rtspStream.streamID, clientEp, clientPort.(uint32))
 		r.logger.Debugf("Update ep %v %v", endpoint, result)
 
-		if !isOnSameNode {
-			endpoint2, result := serverDpGrpcClient.UpdateEndpoint(streamId.(uint32), clientProxyIP, 8050)
+		if !isOnSameNode && rtspStream.proxy_proxy_con_state < Setup {
+			endpoint2, result := serverDpGrpcClient.UpdateEndpoint(rtspStream.streamID, clientProxyIP, 8050)
+			rtspStream.proxy_proxy_con_state = Play
 			r.logger.Debugf("Update ep %v %v", endpoint2, result)
 		}
 	}
 
 	if rc.state == Teardown {
-		streamId, ok := r.rtspStream.Load(serverEp)
-		if !ok {
+		data, _ := r.rtspStream.Load(serverEp)
+		if data == nil {
 			return errors.New("Can't find stream id")
 		}
 
+		rtspStream := data.(RTSPStream)
 		clientPort, _ := r.rtpPort.Load(clientEp)
+		if clientPort == nil {
+			return errors.New("Client port is nil")
+		}
 
-		endpoint, result := clientDpGrpcClient.DeleteEndpoint(streamId.(uint32), clientEp, clientPort.(uint32))
+		endpoint, result := clientDpGrpcClient.DeleteEndpoint(rtspStream.streamID, clientEp, clientPort.(uint32))
 		r.logger.Debugf("Delete ep %v %v", endpoint, result)
 
-		if !isOnSameNode {
-			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(streamId.(uint32), clientProxyIP, 8050)
+		//Delete clients from rtsp stream
+		for i, c := range rtspStream.clients {
+			if c == clientEp {
+				rtspStream.clients = append(rtspStream.clients[:i], rtspStream.clients[i+1:]...)
+				break
+			}
+		}
+
+		if !isOnSameNode && rtspStream.proxy_proxy_con_state < Teardown {
+			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(rtspStream.streamID, clientProxyIP, 8050)
+			rtspStream.proxy_proxy_con_state = Teardown
 			r.logger.Debugf("Delete ep %v %v", endpoint2, result)
 		}
 
-		if r.isLastClient(clientEp) {
+		if len(rtspStream.clients) == 0 {
 			if isOnSameNode {
-				stream, result := clientDpGrpcClient.DeleteStream(streamId.(uint32), serverEp, 8050)
+				stream, result := clientDpGrpcClient.DeleteStream(rtspStream.streamID, serverEp, 8050)
 				r.rtspStream.Delete(serverEp)
 				r.logger.Debugf("Delete stream %v %v", stream, result)
 			} else {
-				stream, result := serverDpGrpcClient.DeleteStream(streamId.(uint32), serverEp, 8050)
+				stream, result := serverDpGrpcClient.DeleteStream(rtspStream.streamID, serverEp, 8050)
+				r.rtspStream.Delete(serverEp)
 				r.logger.Debugf("Delete stream %v %v", stream, result)
 
-				stream2, result := clientDpGrpcClient.DeleteStream(streamId.(uint32), serverProxyIP, 8050)
+				stream2, result := clientDpGrpcClient.DeleteStream(rtspStream.streamID, serverProxyIP, 8050)
 				r.logger.Debugf("Delete stream %v %v", stream2, result)
 			}
 
 		}
-		r.rtspEndpoint.Delete(clientEp)
 		r.rtpPort.Delete(clientEp)
 	}
 
