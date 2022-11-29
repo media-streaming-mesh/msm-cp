@@ -241,7 +241,11 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 		r.logger.Debugf("client header = %v", req.Header)
 
+		// grab client ports
+		hdr := req.Header["Transport"][0]
+		ports := strings.Split(hdr, "=")[1]
 		interleaved := isInterleaved(req.Header["Transport"])
+
 		if interleaved == false {
 			// will need to be able to assign other channel values
 			req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
@@ -252,9 +256,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
 
 		if interleaved == false {
-			// grab client ports
-			hdr := req.Header["Transport"][0]
-			ports := strings.Split(hdr, "=")[1]
 			// do we need to figure out the SSRC here?
 			res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 		}
