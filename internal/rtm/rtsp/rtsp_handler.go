@@ -353,7 +353,7 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 
 	//Send TEARDOWN to server if last client
-	if len(data.(RTSPStream).clients) == 0 {
+	if data.(RTSPStream).clientCount == 0 {
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
@@ -549,20 +549,6 @@ func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 		return true
 	})
 	return check
-}
-
-func (r *RTSP) clientCount(clientEp string) int {
-	var count = 0
-	r.rtspStream.Range(func(serverEp, rtspStream interface{}) bool {
-		clients := rtspStream.(RTSPStream).clients
-		for _, c := range clients {
-			if c == clientEp {
-				count = len(clients)
-			}
-		}
-		return true
-	})
-	return count
 }
 
 func (r *RTSP) getClientRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
