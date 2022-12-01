@@ -336,12 +336,6 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 		return nil, err
 	}
 
-	serverEp := getRemoteIPv4Address(rc.targetRemote)
-	data, _ := r.rtspStream.Load(serverEp)
-	if data == nil {
-		return nil, errors.New("Can't find RTSP stream")
-	}
-
 	//update rtsp state
 	rc.state = Teardown
 
@@ -351,7 +345,8 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 
 	//Send TEARDOWN to server if last client
-	if data.(RTSPStream).clientCount == 0 {
+	serverEp := getRemoteIPv4Address(rc.targetRemote)
+	if r.getClientCount(serverEp) == 0 {
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
@@ -585,6 +580,18 @@ func (r *RTSP) getStubAddress(ep string) string {
 		return true
 	})
 	return stubAddress
+}
+
+func (r *RTSP) getClientCount(serverEp string) int {
+	count := 0
+	data, _ := r.rtspStream.Load(serverEp)
+	if data != nil {
+		for _, v := range data.(RTSPStream).proxyMap {
+			count += len(v.clients)
+		}
+	}
+
+	return count
 }
 
 func getClientPorts(value base.HeaderValue) []uint32 {
