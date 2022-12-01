@@ -77,7 +77,6 @@ func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message)
 
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
-		r.logger.Errorf("stub connection was not found! %v", stubAddr)
 		r.OnExternalClientConnOpen(server, msg)
 		return
 	}
@@ -108,7 +107,6 @@ func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message
 			r.logger.Infof("Unblock write channel for %v", msg.Remote)
 			<-srv.(*StubConnection).addCh
 		} else {
-			r.logger.Errorf("stub connection was not found! %v", stubAddr)
 			r.OnExternalClientConnClose(server, stubAddr)
 		}
 	}
