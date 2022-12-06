@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
 	"sync"
 
 	v12 "k8s.io/api/core/v1"
@@ -104,15 +103,15 @@ func (mapper *NodeMapper) addNode(node *v12.Node) {
 
 	//Key is CIDR
 	var key string
-	calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
+	//calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
 	calicoIPv4PIPTunnel := node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"]
 
 	if calicoIPv4PIPTunnel == "" {
 		key = node.Spec.PodCIDR
 	} else {
-		n := strings.LastIndex(calicoIPv4, "/")
-		subnet := calicoIPv4[n:]
-		key = calicoIPv4PIPTunnel + subnet
+		//n := strings.LastIndex(calicoIPv4, "/")
+		//subnet := calicoIPv4[n:]
+		key = calicoIPv4PIPTunnel + "/26"
 	}
 
 	//Save ip to hashmap
