@@ -415,10 +415,13 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	rc.targetLocal = messageData.Local
 	rc.targetRemote = messageData.Remote
 
-	s_rc, err := r.getRemoteRTSPConnection(s)
-	if err != nil {
-		return nil, err
+	s_key := getRTSPConnectionKey(rc.targetLocal, rc.targetRemote)
+	data, _ := r.rtspConn.Load(s_key)
+	if data == nil {
+		return nil, errors.New("Can't find server RTSP connection")
 	}
+	s_rc := data.(*RTSPConnection)
+
 	r.logger.Debugf("Server state %v", s_rc.state)
 
 	if s_rc.state < Options {
@@ -526,11 +529,6 @@ func getRTSPConnectionKey(s1, s2 string) string {
 func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 	r.logger.Debugf("Check RTSP connection for endpoint %s", ep)
 	check := false
-
-	_, err := r.getRemoteRTSPConnection(s)
-	if err != nil {
-		return false
-	}
 
 	r.rtspConn.Range(func(key, value interface{}) bool {
 		r.logger.Debugf("RTSP connection targetAddress %s", value.(*RTSPConnection).targetAddr)
