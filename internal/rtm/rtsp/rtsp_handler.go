@@ -93,7 +93,7 @@ func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message
 		rc.state = Teardown
 		//Send DELETE_EP to msm-proxy
 		if rc.targetAddr != "" {
-			if err := r.SendProxyData(msg); err != nil {
+			if err := r.SendProxyData(msg, make([]uint32, 0)); err != nil {
 				r.logger.Errorf("Could not send proxy data %v", err)
 			}
 		}
@@ -230,11 +230,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		return nil, error
 	}
 
-	// store client ports
-	clientPorts := getClientPorts(req.Header["Transport"])
-	clientEp := getRemoteIPv4Address(s.Remote)
-	r.rtpPort.Store(clientEp, clientPorts[0])
-
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 		r.logger.Debugf("client header = %v", req.Header)
@@ -340,7 +335,7 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 	rc.state = Teardown
 
 	//Send DELETE_EP to msm-proxy for last client
-	if err := r.SendProxyData(s); err != nil {
+	if err := r.SendProxyData(s, make([]uint32, 0)); err != nil {
 		r.logger.Errorf("Could not send proxy data %v", err)
 	}
 
