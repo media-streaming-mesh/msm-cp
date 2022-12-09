@@ -197,9 +197,13 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 	if s_rc.state < Describe {
 		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
+		originalURL := req.URL.String()
 		req.URL = r.updateURLIpAddress(req.URL)
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
+
+		res.Header["Content-Base"] = base.HeaderValue{originalURL}
+		r.logger.Debugf("[s->c] update DESCRIBE RESPONSE %+v", res)
 
 		s_rc.state = Describe
 		s_rc.response[Describe] = res
@@ -422,7 +426,6 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	if s_rc.state < Options {
 		// 6. Forward OPTIONS command to server pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
-		req.URL = r.updateURLIpAddress(req.URL)
 		req.Write(data)
 
 		optionsMsg := &pb.Message{
