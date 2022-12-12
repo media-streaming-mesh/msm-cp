@@ -77,7 +77,6 @@ func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message)
 
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
-		r.logger.Errorf("stub connection was not found! %v", stubAddr)
 		r.OnExternalClientConnOpen(server, msg)
 		return
 	}
@@ -94,7 +93,7 @@ func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message
 		rc.state = Teardown
 		//Send DELETE_EP to msm-proxy
 		if rc.targetAddr != "" {
-			if err := r.SendProxyData(msg); err != nil {
+			if err := r.SendProxyData(msg, make([]uint32, 0)); err != nil {
 				r.logger.Errorf("Could not send proxy data %v", err)
 			}
 		}
@@ -108,7 +107,6 @@ func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message
 			r.logger.Infof("Unblock write channel for %v", msg.Remote)
 			<-srv.(*StubConnection).addCh
 		} else {
-			r.logger.Errorf("stub connection was not found! %v", stubAddr)
 			r.OnExternalClientConnClose(server, stubAddr)
 		}
 	}
@@ -199,9 +197,13 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 	if s_rc.state < Describe {
 		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
+		originalURL := req.URL.String()
 		req.URL = r.updateURLIpAddress(req.URL)
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
+
+		res.Header["Content-Base"] = base.HeaderValue{originalURL}
+		r.logger.Debugf("[s->c] update DESCRIBE RESPONSE %+v", res)
 
 		s_rc.state = Describe
 		s_rc.response[Describe] = res
@@ -232,16 +234,15 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		return nil, error
 	}
 
-	// store client ports
-	clientPorts := getClientPorts(req.Header["Transport"])
-	clientEp := getRemoteIPv4Address(s.Remote)
-	r.rtpPort.Store(clientEp, clientPorts[0])
-
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 		r.logger.Debugf("client header = %v", req.Header)
 
+		// grab client ports
+		hdr := req.Header["Transport"][0]
+		ports := strings.Split(hdr, "=")[1]
 		interleaved := isInterleaved(req.Header["Transport"])
+
 		if interleaved == false {
 			// will need to be able to assign other channel values
 			req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
@@ -252,9 +253,6 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
 
 		if interleaved == false {
-			// grab client ports
-			hdr := req.Header["Transport"][0]
-			ports := strings.Split(hdr, "=")[1]
 			// do we need to figure out the SSRC here?
 			res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 		}
@@ -332,22 +330,22 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
-	clientEp := getRemoteIPv4Address(s.Remote)
-	isLastClient := r.isLastClient(clientEp)
-	//update rtsp state
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
 	}
+
+	//update rtsp state
 	rc.state = Teardown
 
 	//Send DELETE_EP to msm-proxy for last client
-	if err := r.SendProxyData(s); err != nil {
+	if err := r.SendProxyData(s, make([]uint32, 0)); err != nil {
 		r.logger.Errorf("Could not send proxy data %v", err)
 	}
 
 	//Send TEARDOWN to server if last client
-	if isLastClient {
+	serverEp := getRemoteIPv4Address(rc.targetRemote)
+	if r.getClientCount(serverEp) == 0 {
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
@@ -416,16 +414,18 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	rc.targetLocal = messageData.Local
 	rc.targetRemote = messageData.Remote
 
-	s_rc, err := r.getRemoteRTSPConnection(s)
-	if err != nil {
-		return nil, err
+	s_key := getRTSPConnectionKey(rc.targetLocal, rc.targetRemote)
+	data, _ := r.rtspConn.Load(s_key)
+	if data == nil {
+		return nil, errors.New("Can't find server RTSP connection")
 	}
+	s_rc := data.(*RTSPConnection)
+
 	r.logger.Debugf("Server state %v", s_rc.state)
 
 	if s_rc.state < Options {
 		// 6. Forward OPTIONS command to server pod
 		data := bytes.NewBuffer(make([]byte, 0, 4096))
-		req.URL = r.updateURLIpAddress(req.URL)
 		req.Write(data)
 
 		optionsMsg := &pb.Message{
@@ -528,11 +528,6 @@ func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 	r.logger.Debugf("Check RTSP connection for endpoint %s", ep)
 	check := false
 
-	_, err := r.getRemoteRTSPConnection(s)
-	if err != nil {
-		return false
-	}
-
 	r.rtspConn.Range(func(key, value interface{}) bool {
 		r.logger.Debugf("RTSP connection targetAddress %s", value.(*RTSPConnection).targetAddr)
 		r.logger.Debugf("RTSP connection localAddress %s", value.(*RTSPConnection).targetLocal)
@@ -543,26 +538,6 @@ func (r *RTSP) isConnectionOpen(ep string, s *pb.Message) bool {
 		return true
 	})
 	return check
-}
-
-func (r *RTSP) isLastClient(ep string) bool {
-	streamId, ok := r.rtspEndpoint.Load(ep)
-	if !ok {
-		return false
-	}
-
-	var epCount = 0
-	r.rtspEndpoint.Range(func(ep, sId interface{}) bool {
-		if sId.(uint32) == streamId.(uint32) {
-			epCount += 1
-		}
-		return true
-	})
-	r.logger.Debugf("RTSP client ep count %v", epCount)
-	if epCount == 1 {
-		return true
-	}
-	return false
 }
 
 func (r *RTSP) getClientRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
@@ -589,6 +564,30 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 		return nil, errors.New("Can't find server RTSP connection")
 	}
 	return s_rc.(*RTSPConnection), nil
+}
+
+func (r *RTSP) getStubAddress(ep string) string {
+	var stubAddress = ""
+	r.stubConn.Range(func(key, srv interface{}) bool {
+		value := srv.(*StubConnection).clients[ep]
+		if value == ep {
+			stubAddress = key.(string)
+		}
+		return true
+	})
+	return stubAddress
+}
+
+func (r *RTSP) getClientCount(serverEp string) int {
+	count := 0
+	data, _ := r.rtspStream.Load(serverEp)
+	if data != nil {
+		for _, v := range data.(RTSPStream).proxyMap {
+			count += len(v.clients)
+		}
+	}
+
+	return count
 }
 
 func getClientPorts(value base.HeaderValue) []uint32 {
