@@ -243,6 +243,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 	}
 	//Check if client/server on same node
 	isOnSameNode := node_mapper.IsOnSameNode(endpoint, serverEp)
+	r.logger.Debugf("server %v and endpoint %v - same node is %v", serverEp, endpoint, isOnSameNode)
 
 	clientProxyIP, err = node_mapper.MapNode(clientEp)
 	if err != nil {
@@ -306,6 +307,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 		data, _ := r.rtspStream.Load(serverEp)
 		if data == nil {
 			streamId := transport.GetStreamID()
+			r.logger.Debugf("stream ID %v", streamId)
 			if isOnSameNode {
 				//clientDpGrpcClient and clientProxyIP is serverDpGrpcClient and serverProxyIP since client and
 				// server on same node
@@ -399,7 +401,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 						streamState: Play,
 						clients:     clientProxy.clients,
 					}
-					r.logger.Debugf("Update ep %v %v", endpoint2, result)
+					r.logger.Debugf("Update proxy ep %v %v", endpoint2, result)
 				}
 				break
 			}
