@@ -107,7 +107,7 @@ func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message
 			r.logger.Infof("Unblock write channel for %v", msg.Remote)
 			<-srv.(*StubConnection).addCh
 		} else {
-			r.OnExternalClientConnClose(server, stubAddr)
+			r.OnExternalClientConnClose(server, msg)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (r *RTSP) OnExternalClientConnOpen(server pb.MsmControlPlane_SendServer, ms
 		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
 		return
 	}
-	srv.(*StubConnection).clients[remoteAddr] = remoteAddr
+	srv.(*StubConnection).clients[msg.Remote] = remoteAddr
 
 	key := getRTSPConnectionKey(msg.Local, msg.Remote)
 	rc, ok := r.rtspConn.Load(key)
@@ -141,21 +141,24 @@ func (r *RTSP) OnExternalClientConnOpen(server pb.MsmControlPlane_SendServer, ms
 	}
 
 	r.logger.Infof("Connection for external client: %s successfully open", remoteAddr)
+	r.logger.Infof("Save client %v with key %v to stub %v", remoteAddr, msg.Remote, stubAddr)
 }
 
-func (r *RTSP) OnExternalClientConnClose(server pb.MsmControlPlane_SendServer, remoteAddr string) {
+func (r *RTSP) OnExternalClientConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
 	// get remote ip addr
 	ctx := server.Context()
 	p, _ := peer.FromContext(ctx)
 	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
+	remoteAddr := getRemoteIPv4Address(msg.Remote)
 
 	srv, ok := r.stubConn.Load(stubAddr)
 	if !ok {
 		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
 		return
 	}
-	delete(srv.(*StubConnection).clients, remoteAddr)
+	delete(srv.(*StubConnection).clients, msg.Remote)
 	r.logger.Infof("Connection for external client: %s successfully close", remoteAddr)
+	r.logger.Infof("Delete client %v with key %v from stub %v", remoteAddr, msg.Remote, stubAddr)
 }
 
 // called when a session is opened.
@@ -570,11 +573,12 @@ func (r *RTSP) getStubAddress(ep string) string {
 	var stubAddress = ""
 	r.stubConn.Range(func(key, srv interface{}) bool {
 		value := srv.(*StubConnection).clients[ep]
-		if value == ep {
+		if value != "" {
 			stubAddress = key.(string)
 		}
 		return true
 	})
+	r.logger.Infof("Found stub address %v with key %v", stubAddress, ep)
 	return stubAddress
 }
 
