@@ -187,6 +187,8 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 					Data:   fmt.Sprintf("%s", data),
 				}
 
+				r.logger.Debugf("response to client is %v", pbRes)
+
 				//Send response back to client
 				if err := srv.Send(pbRes); err != nil {
 					r.logger.Errorf("could not send response, error: %v", err)
@@ -321,7 +323,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 					streamState: Create,
 				}
 				r.rtspStream.Store(serverEp, rtspStream)
-				r.logger.Debugf("Create stream %v result %v", stream, result)
+				r.logger.Debugf("Create stream %v result %v", stream, *result)
 			} else {
 				stream, result := serverDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverEp, serverPorts[0])
 				rtspStream = RTSPStream{
@@ -337,10 +339,10 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 					streamState: Create,
 				}
 				r.rtspStream.Store(serverEp, rtspStream)
-				r.logger.Debugf("Create stream %v result %v", stream, result)
+				r.logger.Debugf("Create stream %v result %v", stream, *result)
 
 				stream2, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
-				r.logger.Debugf("Create stream2 %v result %v", stream2, result)
+				r.logger.Debugf("Create proxy stream %v result %v", stream2, *result)
 
 			}
 		} else {
@@ -358,7 +360,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 		if !isOnSameNode && clientProxy.streamState < Setup {
 			endpoint, result := serverDpGrpcClient.CreateEndpoint(rtspStream.streamID, pb_dp.Encap_RTP_UDP, clientProxyIP, 8050)
 			clientProxy.streamState = Create
-			r.logger.Debugf("Created ep %v result %v", endpoint, result)
+			r.logger.Debugf("Created proxy ep %v result %v", endpoint, *result)
 		}
 
 		endpoint, result := clientDpGrpcClient.CreateEndpoint(rtspStream.streamID, pb_dp.Encap_RTP_UDP, clientEp, clientPorts[0])
@@ -372,7 +374,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 			streamState: clientProxy.streamState,
 			clients:     clientProxy.clients,
 		}
-		r.logger.Debugf("Created ep %v result %v", endpoint, result)
+		r.logger.Debugf("Created ep %v result %v", endpoint, *result)
 
 	}
 

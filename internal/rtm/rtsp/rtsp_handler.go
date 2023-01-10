@@ -198,22 +198,25 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	if error != nil {
 		return nil, error
 	}
+	originalURL := req.URL.String()
+
 	if s_rc.state < Describe {
 		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
-		originalURL := req.URL.String()
+
 		req.URL = r.updateURLIpAddress(req.URL)
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
-
-		res.Header["Content-Base"] = base.HeaderValue{originalURL}
-		r.logger.Debugf("[s->c] update DESCRIBE RESPONSE %+v", res)
 
 		s_rc.state = Describe
 		s_rc.response[Describe] = res
 		s_rc.responseErr[Describe] = err
 	}
 
-	return s_rc.response[Describe], s_rc.responseErr[Describe]
+	res := s_rc.response[Describe]
+	res.Header["Content-Base"] = base.HeaderValue{originalURL}
+	r.logger.Debugf("[s->c] updated DESCRIBE RESPONSE %+v", res)
+
+	return res, s_rc.responseErr[Describe]
 }
 
 // called after receiving an ANNOUNCE request.
@@ -237,28 +240,24 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		return nil, error
 	}
 
+	// grab client ports
+	hdr := req.Header["Transport"][0]
+	ports := strings.Split(hdr, "=")[1]
+	interleaved := isInterleaved(req.Header["Transport"])
+
 	if s_rc.state < Setup {
 		r.logger.Debugf("RTSPConnection connection state not SETUP")
 		r.logger.Debugf("client header = %v", req.Header)
 
-		// grab client ports
-		hdr := req.Header["Transport"][0]
-		ports := strings.Split(hdr, "=")[1]
-		interleaved := isInterleaved(req.Header["Transport"])
-
 		if interleaved == false {
 			// will need to be able to assign other channel values
+			// always interleaved towards the server (for now)
 			req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
 			r.logger.Debugf("server header = %v", req.Header)
 		}
 
 		res, err := r.clientToServer(req, s)
 		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
-
-		if interleaved == false {
-			// do we need to figure out the SSRC here?
-			res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
-		}
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
@@ -272,7 +271,18 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		s_rc.responseErr[Setup] = err
 	}
 
-	return s_rc.response[Setup], s_rc.responseErr[Setup]
+	res := s_rc.response[Setup]
+
+	if interleaved {
+		res.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
+	} else {
+		// do we need to figure out the SSRC here?
+		res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
+	}
+
+	r.logger.Debugf("modified setup response is %v", res)
+
+	return res, s_rc.responseErr[Setup]
 }
 
 // called after receiving a PLAY request.
