@@ -212,11 +212,10 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 		s_rc.responseErr[Describe] = err
 	}
 
-	res := s_rc.response[Describe]
-	res.Header["Content-Base"] = base.HeaderValue{originalURL}
-	r.logger.Debugf("[s->c] updated DESCRIBE RESPONSE %+v", res)
+	s_rc.response[Describe].Header["Content-Base"] = base.HeaderValue{originalURL}
+	r.logger.Debugf("[s->c] updated DESCRIBE RESPONSE %+v", s_rc.response[Describe])
 
-	return res, s_rc.responseErr[Describe]
+	return s_rc.response[Describe], s_rc.responseErr[Describe]
 }
 
 // called after receiving an ANNOUNCE request.
@@ -271,18 +270,16 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		s_rc.responseErr[Setup] = err
 	}
 
-	res := s_rc.response[Setup]
-
 	if interleaved {
-		res.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
+		s_rc.response[Setup].Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
 	} else {
 		// do we need to figure out the SSRC here?
-		res.Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
+		s_rc.response[Setup].Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 	}
 
-	r.logger.Debugf("modified setup response is %v", res)
+	r.logger.Debugf("modified setup response is %v", s_rc.response[Setup])
 
-	return res, s_rc.responseErr[Setup]
+	return s_rc.response[Setup], s_rc.responseErr[Setup]
 }
 
 // called after receiving a PLAY request.
