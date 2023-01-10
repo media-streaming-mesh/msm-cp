@@ -237,7 +237,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 	r.logger.Debugf("client EP is %v", clientEp)
 	r.logger.Debugf("server EP is %v", serverEp)
 
-	endpoint := r.getStubAddress(clientEp)
+	endpoint := r.getStubAddress(s.Remote)
 	if endpoint == "" {
 		endpoint = clientEp
 	}
