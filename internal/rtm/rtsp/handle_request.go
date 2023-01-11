@@ -26,6 +26,10 @@ import (
 
 func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, error) {
 
+	var res *base.Response
+	var err error
+	var cSeq base.HeaderValue
+
 	if cSeq, ok := req.Header["CSeq"]; !ok || len(cSeq) != 1 {
 		r.logger.Error("CSeq missing")
 
@@ -39,83 +43,55 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 
 	switch req.Method {
 	case base.Options:
-		res, err := r.OnOptions(req, s)
-		if err != nil {
-			return nil, err
-		}
-
-		return res, err
+		res, err = r.OnOptions(req, s)
 	case base.Announce:
-		res, err := r.OnAnnounce(req, s)
-		if err != nil {
-			return nil, err
-		}
-
-		return res, nil
+		res, err = r.OnAnnounce(req, s)
 	case base.Describe:
-		res, err := r.OnDescribe(req, s)
-		if err != nil {
-			return nil, err
-		}
-
-		return res, err
+		res, err = r.OnDescribe(req, s)
 	case base.Setup:
-		res, err := r.OnSetup(req, s)
-		if err != nil {
-			return nil, err
-		}
-
-		return res, err
+		res, err = r.OnSetup(req, s)
 	case base.Play:
 		if sxID != "" {
-			res, err := r.OnPlay(req, s)
-			if err != nil {
-				return nil, err
-			}
-
-			return res, err
+			res, err = r.OnPlay(req, s)
+		} else {
+			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.Pause:
 		if sxID != "" {
-			res, err := r.OnPause(req, s)
-			if err != nil {
-				return nil, err
-			}
-
-			return res, err
+			res, err = r.OnPause(req, s)
+		} else {
+			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.Record:
 		if sxID != "" {
-			res, err := r.OnRecord(req)
-			if err != nil {
-				return nil, err
-			}
-
-			return res, err
+			res, err = r.OnRecord(req)
+		} else {
+			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.Teardown:
 		if sxID != "" {
-			res, err := r.OnTeardown(req, s)
-			if err != nil {
-				return nil, err
-			}
-
-			return res, err
+			res, err = r.OnTeardown(req, s)
+		} else {
+			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.GetParameter:
 		if sxID != "" {
-			res, err := r.OnGetParameter(req, s)
-			if err != nil {
-				return nil, err
-			}
-
-			return res, err
+			res, err = r.OnGetParameter(req, s)
+		} else {
+			err = liberrors.ErrServerInvalidState{}
 		}
-	}
-	return &base.Response{
-		StatusCode: base.StatusBadRequest,
-	}, liberrors.ErrServerUnhandledRequest{Request: req}
 
+	default:
+		return &base.Response{StatusCode: base.StatusBadRequest}, liberrors.ErrServerUnhandledRequest{Request: req}
+	}
+
+	if err != nil {
+		return nil, err
+	} else {
+		// reflect back the cSeq
+		res.Header["CSeq"] = cSeq
+		return res, nil
+	}
 }
 
 func (r *RTSP) handleResponse(res *base.Response, s *pb.Message) error {
