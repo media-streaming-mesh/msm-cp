@@ -564,14 +564,14 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 	// Client RTSPConnection
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
-		return nil, errors.New("Can't find client RTSP connection")
+		return nil, errors.New("Can't find remote client RTSP connection")
 	}
 
 	// Server RTSPConnection
 	s_key := getRTSPConnectionKey(rc.targetLocal, rc.targetRemote)
 	s_rc, s_ok := r.rtspConn.Load(s_key)
 	if !s_ok {
-		return nil, errors.New("Can't find server RTSP connection")
+		return nil, errors.New("Can't find remote server RTSP connection")
 	}
 	return s_rc.(*RTSPConnection), nil
 }
