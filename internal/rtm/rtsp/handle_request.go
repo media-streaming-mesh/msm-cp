@@ -28,9 +28,10 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 
 	var res *base.Response
 	var err error
+	var ok bool
 	var cSeq base.HeaderValue
 
-	if cSeq, ok := req.Header["CSeq"]; !ok || len(cSeq) != 1 {
+	if cSeq, ok = req.Header["CSeq"]; !ok || len(cSeq) != 1 {
 		r.logger.Error("CSeq missing")
 
 		return &base.Response{
@@ -89,6 +90,7 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 		return nil, err
 	} else {
 		// reflect back the cSeq
+		r.logger.Debugf("cseq = %v", cSeq)
 		res.Header["CSeq"] = cSeq
 		return res, nil
 	}

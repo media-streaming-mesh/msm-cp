@@ -323,6 +323,7 @@ func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 
 	return &base.Response{
 		StatusCode: base.StatusOK,
+		Header:     make(base.Header),
 	}, nil
 }
 
@@ -363,6 +364,7 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 
 	return &base.Response{
 		StatusCode: base.StatusOK,
+		Header:     make(base.Header),
 	}, nil
 }
 
