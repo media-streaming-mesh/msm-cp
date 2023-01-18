@@ -433,17 +433,17 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 			}
 		}
 
-		//End proxy-proxy connection
-		if !isOnSameNode && clientProxy.streamState < Teardown && len(clientProxy.clients) == 0 {
-			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(rtspStream.streamID, clientProxyIP, 8050)
-			clientProxy.streamState = Teardown
-			r.logger.Debugf("Delete ep %v %v", endpoint2, result)
-		}
-
 		rtspStream.proxyMap[clientProxyIP] = Proxy{
 			proxyIP:     clientProxy.proxyIP,
 			streamState: clientProxy.streamState,
 			clients:     clientProxy.clients,
+		}
+
+		//End proxy-proxy connection
+		if !isOnSameNode && clientProxy.streamState < Teardown && len(clientProxy.clients) == 0 {
+			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(rtspStream.streamID, clientProxyIP, 8050)
+			delete(rtspStream.proxyMap, clientProxyIP)
+			r.logger.Debugf("Delete ep %v %v", endpoint2, result)
 		}
 
 		if r.getClientCount(serverEp) == 0 {
