@@ -310,44 +310,51 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 		if data == nil {
 			streamId := transport.GetStreamID()
 			r.logger.Debugf("stream ID %v", streamId)
+
+			// create the RTSP stream
+			rtspStream = RTSPStream{
+				streamID: streamId,
+				proxyMap: make(map[string]Proxy),
+			}
+
 			if isOnSameNode {
-				//clientDpGrpcClient and clientProxyIP is serverDpGrpcClient and serverProxyIP since client and
-				// server on same node
+				// add the stream to the proxy
 				stream, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverEp, serverPorts[0])
-				rtspStream = RTSPStream{
-					streamID: streamId,
-					proxyMap: make(map[string]Proxy),
-				}
-				rtspStream.proxyMap[clientProxyIP] = Proxy{
-					proxyIP:     clientProxyIP,
-					streamState: Create,
-				}
-				r.rtspStream.Store(serverEp, rtspStream)
 				r.logger.Debugf("Create stream %v result %v", stream, *result)
+
 			} else {
+				// add the stream to the server proxy
 				stream, result := serverDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverEp, serverPorts[0])
-				rtspStream = RTSPStream{
-					streamID: streamId,
-					proxyMap: make(map[string]Proxy),
-				}
+				r.logger.Debugf("Create server stream %v result %v", stream, *result)
+
+				// add the stream to the client proxy
+				stream, result = clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
+				r.logger.Debugf("Create client stream %v result %v", stream, *result)
+
+				// add the server proxy to the proxy map
 				rtspStream.proxyMap[serverProxyIP] = Proxy{
 					proxyIP:     serverProxyIP,
 					streamState: Create,
 				}
-				rtspStream.proxyMap[clientProxyIP] = Proxy{
-					proxyIP:     clientProxyIP,
-					streamState: Create,
-				}
-				r.rtspStream.Store(serverEp, rtspStream)
-				r.logger.Debugf("Create stream %v result %v", stream, *result)
-
-				stream2, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
-				r.logger.Debugf("Create proxy stream %v result %v", stream2, *result)
-
 			}
+
+			// add the client proxy to the proxy map
+			rtspStream.proxyMap[clientProxyIP] = Proxy{
+				proxyIP:     clientProxyIP,
+				streamState: Create,
+			}
+
+			// now store the RTSP stream
+			r.rtspStream.Store(serverEp, rtspStream)
+
 		} else {
 			rtspStream = data.(RTSPStream)
 			if _, exists := rtspStream.proxyMap[clientProxyIP]; !exists {
+				// add the stream to the client proxy
+				stream, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
+				r.logger.Debugf("Create client stream %v result %v", stream, *result)
+
+				// add the client proxy to the proxy map
 				rtspStream.proxyMap[clientProxyIP] = Proxy{
 					proxyIP:     clientProxyIP,
 					streamState: Create,
