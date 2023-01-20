@@ -351,8 +351,7 @@ func (r *RTSP) SendProxyData(s *pb.Message, clientPorts []uint32) error {
 			rtspStream = data.(RTSPStream)
 			if _, exists := rtspStream.proxyMap[clientProxyIP]; !exists {
 				// add the stream to the client proxy
-				streamId := transport.GetStreamID()
-				stream, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
+				stream, result := clientDpGrpcClient.CreateStream(rtspStream.streamID, pb_dp.Encap_RTP_UDP, serverProxyIP, serverPorts[0])
 				r.logger.Debugf("Create client stream %v result %v", stream, *result)
 
 				// add the client proxy to the proxy map
