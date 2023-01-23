@@ -7,13 +7,13 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+RUN go mod download
+
 # Copy the go source
 COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/ internal/
 COPY pkg/ pkg/
-
-RUN go mod download
 
 ARG TARGETOS TARGETARCH
 
