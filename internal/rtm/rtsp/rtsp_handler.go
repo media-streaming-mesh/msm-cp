@@ -511,6 +511,10 @@ func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 
 	r.logger.Debugf("endpoints to connect: %v", urls)
 
+	if len(urls) == 0 {
+		return "", errors.New("Can't get endpoint from path")
+	}
+
 	ep, err := base.ParseURL(urls[0])
 	if err != nil {
 		return "", errors.New("could not parse endpoint")
