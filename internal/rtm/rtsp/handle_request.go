@@ -87,6 +87,7 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 	}
 
 	if err != nil {
+		r.logger.Debugf("error processing CP message")
 		return nil, err
 	} else {
 		// reflect back the cSeq

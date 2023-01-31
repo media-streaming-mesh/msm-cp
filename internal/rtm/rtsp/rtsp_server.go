@@ -127,7 +127,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 		// exit if context is done or continue
 		select {
 		case <-ctx.Done():
-			r.logger.Debugf("reveiced connection done")
+			r.logger.Debugf("received connection done")
 			return ctx.Err()
 		default:
 		}
@@ -177,7 +177,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 				pbMsg, err := r.handleRequest(req, stream)
 				if err != nil {
 					r.logger.Errorf("incoming request error=%s", err)
-					return err
+					continue
 				}
 				pbMsg.Write(data)
 				pbRes := &pb.Message{
@@ -189,7 +189,7 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 
 				r.logger.Debugf("response to client is %v", pbRes)
 
-				//Send response back to client
+				// Send response back to client
 				if err := srv.Send(pbRes); err != nil {
 					r.logger.Errorf("could not send response, error: %v", err)
 				} else {
@@ -204,8 +204,8 @@ func (r *RTSP) Send(srv pb.MsmControlPlane_SendServer) error {
 				// received a server-side response
 				err := r.handleResponse(res, stream)
 				if err != nil {
-					r.logger.Errorf("incoming request error=%s", err)
-					return err
+					r.logger.Errorf("incoming response error=%s", err)
+					continue
 				}
 			}
 
