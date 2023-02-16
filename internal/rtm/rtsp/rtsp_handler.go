@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"log"
 	"net"
 	"strconv"
@@ -27,150 +28,7 @@ import (
 
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"google.golang.org/grpc/peer"
 )
-
-// called when a connection is opened.
-func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
-
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	remoteAddr, _, _ := net.SplitHostPort(p.Addr.String())
-
-	sc := &StubConnection{
-		conn:    server,
-		addCh:   make(chan *pb.Message, 1),
-		dataCh:  make(chan *base.Response, 1),
-		clients: make(map[string]string),
-	}
-
-	//Send node ip address to stub
-	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
-	r.logger.Debugf("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
-	if err == nil {
-		configMsg := &pb.Message{
-			Event:  pb.Event_CONFIG,
-			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
-		}
-		sc.conn.Send(configMsg)
-	}
-
-	// save stub connection on a sync.Map
-	r.stubConn.Store(remoteAddr, sc)
-	r.logger.Infof("Connection for client: %s successfully registered", remoteAddr)
-}
-
-// called when a connection is opened.
-func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-
-	// create a new RTSP connection and store it
-	sc := newRTSPConnection(r.logger)
-	stubAddr := getRemoteIPv4Address(msg.Remote)
-	sc.author = msg.Remote
-
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	r.rtspConn.Store(key, sc)
-	r.logger.Infof("RTSP connection key %v", key)
-	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.OnExternalClientConnOpen(server, msg)
-		return
-	}
-	srv.(*StubConnection).data = *msg
-	srv.(*StubConnection).addCh <- msg
-	r.logger.Infof("StubConnection open channel %v", msg)
-}
-
-// called when a connection is close.
-func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	//update rtsp state
-	rc, _ := r.getClientRTSPConnection(msg)
-	if rc.state != Teardown {
-		rc.state = Teardown
-		//Send DELETE_EP to msm-proxy
-		if rc.targetAddr != "" {
-			if err := r.SendProxyData(msg, make([]uint32, 0)); err != nil {
-				r.logger.Errorf("Could not send proxy data %v", err)
-			}
-		}
-	}
-
-	// For client RTSP, read from channel to unblock write
-	if rc.targetAddr != "" {
-		stubAddr := getRemoteIPv4Address(msg.Remote)
-		srv, ok := r.stubConn.Load(stubAddr)
-		if ok {
-			r.logger.Infof("Unblock write channel for %v", msg.Remote)
-			<-srv.(*StubConnection).addCh
-		} else {
-			r.OnExternalClientConnClose(server, msg)
-		}
-	}
-
-	// find RTSP connection and delete it
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	r.rtspConn.Delete(key)
-
-	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
-}
-
-func (r *RTSP) OnExternalClientConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	remoteAddr := getRemoteIPv4Address(msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
-		return
-	}
-	srv.(*StubConnection).clients[msg.Remote] = remoteAddr
-
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	rc, ok := r.rtspConn.Load(key)
-	if ok {
-		messageData := srv.(*StubConnection).data
-		rc.(*RTSPConnection).targetLocal = messageData.Local
-		rc.(*RTSPConnection).targetRemote = messageData.Remote
-	}
-
-	r.logger.Infof("Connection for external client: %s successfully open", remoteAddr)
-	r.logger.Infof("Save client %v with key %v to stub %v", remoteAddr, msg.Remote, stubAddr)
-}
-
-func (r *RTSP) OnExternalClientConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	remoteAddr := getRemoteIPv4Address(msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
-		return
-	}
-	delete(srv.(*StubConnection).clients, msg.Remote)
-	r.logger.Infof("Connection for external client: %s successfully close", remoteAddr)
-	r.logger.Infof("Delete client %v with key %v from stub %v", remoteAddr, msg.Remote, stubAddr)
-}
-
-// called when a session is opened.
-func (r *RTSP) OnSessionOpen() {
-	// save session
-}
-
-// called when a session is closed.
-func (r *RTSP) OnSessionClose() {
-	log.Printf("session closed")
-
-}
 
 // called after receiving an OPTIONS request.
 func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -341,6 +199,10 @@ func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response,
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 
+	//Delete client from clientMap
+	connectionKey := getRTSPConnectionKey(s.Local, s.Remote)
+	delete(r.clientMap, connectionKey)
+
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
@@ -348,11 +210,6 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 
 	//update rtsp state
 	rc.state = Teardown
-
-	//Send DELETE_EP to msm-proxy for last client
-	if err := r.SendProxyData(s, make([]uint32, 0)); err != nil {
-		r.logger.Errorf("Could not send proxy data %v", err)
-	}
 
 	//Send TEARDOWN to server if last client
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
@@ -387,7 +244,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	}
 
 	// 3. Find stub connection for given path
-	srv, ok := r.stubConn.Load(host)
+	stubConn, ok := model.StubMap.Load(host)
 	if !ok {
 		r.logger.Errorf("could not find stub connection for endpoint")
 		return nil, errors.New("not found")
@@ -406,17 +263,17 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 			Event:  pb.Event_REQUEST,
 			Remote: ep,
 		}
-		srv.(*StubConnection).conn.Send(addMsg)
+		stubConn.(*model.StubConnection).Conn.Send(addMsg)
 
 		// Waiting for server pod response with local/remote ports
 		// CP will receive Event_ADD and send value to addCh to unblock channel
-		<-srv.(*StubConnection).addCh
+		<-stubConn.(*model.StubConnection).AddCh
 	} else {
 		r.logger.Debugf("Remote endpoint RTSP connection open")
 	}
 
 	// 5. Update target to client pod
-	messageData := srv.(*StubConnection).data
+	messageData := stubConn.(*model.StubConnection).Data
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
@@ -433,7 +290,14 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	}
 	s_rc := data.(*RTSPConnection)
 
-	r.logger.Debugf("Server state %v", s_rc.state)
+	//Update client map
+	connectionKey := getRTSPConnectionKey(s.Local, s.Remote)
+	client := r.clientMap[connectionKey]
+	r.clientMap[connectionKey] = Client{
+		getRemoteIPv4Address(s.Remote),
+		client.clientPorts,
+		host,
+	}
 
 	if s_rc.state < Options {
 		// 6. Forward OPTIONS command to server pod
@@ -447,12 +311,11 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 			Data:   fmt.Sprintf("%s", data),
 		}
 
-		srv.(*StubConnection).conn.Send(optionsMsg)
+		stubConn.(*model.StubConnection).Conn.Send(optionsMsg)
 		r.logger.Debugf("waiting on options response")
-		res := <-srv.(*StubConnection).dataCh
+		res := <-stubConn.(*model.StubConnection).DataCh
 
 		// Update remote RTSP Connection
-		r.logger.Debugf("Going to update server state")
 		s_rc.state = Options
 		s_rc.response[Options] = res
 		s_rc.responseErr[Options] = err
@@ -472,7 +335,7 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	}
 
 	stubAddr := sc.(*RTSPConnection).targetAddr
-	srv, ok := r.stubConn.Load(stubAddr)
+	stubConn, ok := model.StubMap.Load(stubAddr)
 	if !ok {
 		return nil, errors.New("can't load stub connection")
 	}
@@ -480,17 +343,14 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
 
-	r.logger.Debugf("Sending data from client to server %v", stubAddr)
-	srv.(*StubConnection).conn.Send(&pb.Message{
+	stubConn.(*model.StubConnection).Conn.Send(&pb.Message{
 		Event:  pb.Event_DATA,
 		Local:  sc.(*RTSPConnection).targetLocal,
 		Remote: sc.(*RTSPConnection).targetRemote,
 		Data:   fmt.Sprintf("%s", data),
 	})
 
-	r.logger.Debugf("Sent data to server")
-
-	res := <-srv.(*StubConnection).dataCh
+	res := <-stubConn.(*model.StubConnection).DataCh
 
 	return res, nil
 }
@@ -582,28 +442,14 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 	return s_rc.(*RTSPConnection), nil
 }
 
-func (r *RTSP) getStubAddress(ep string) string {
-	var stubAddress = ""
-	r.stubConn.Range(func(key, srv interface{}) bool {
-		value := srv.(*StubConnection).clients[ep]
-		if value != "" {
-			stubAddress = key.(string)
-		}
-		return true
-	})
-	r.logger.Infof("Found stub address %v with key %v", stubAddress, ep)
-	return stubAddress
-}
-
 func (r *RTSP) getClientCount(serverEp string) int {
+	r.logger.Debugf("Get client count %v", r.clientMap)
 	count := 0
-	data, _ := r.rtspStream.Load(serverEp)
-	if data != nil {
-		for _, v := range data.(RTSPStream).proxyMap {
-			count += len(v.clients)
+	for _, v := range r.clientMap {
+		if v.serverIp == serverEp {
+			count++
 		}
 	}
-
 	return count
 }
 

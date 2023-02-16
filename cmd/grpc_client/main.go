@@ -40,7 +40,7 @@ func main() {
 	client := pb.NewMsmControlPlaneClient(conn)
 	stream, err := client.Send(context.Background())
 	if err != nil {
-		log.Fatalf("openn stream error %v", err)
+		log.Fatalf("openn stream-mapper error %v", err)
 	}
 
 	ctx := stream.Context()

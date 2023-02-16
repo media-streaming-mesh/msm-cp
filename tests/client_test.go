@@ -23,5 +23,5 @@ func TestCreateStream(t *testing.T) {
 	}
 
 	stream, result := dpGrpcClient.CreateStream("192.168.82.20", 8050)
-	logger.Debugf("Create stream %v %v", stream, result)
+	logger.Debugf("Create stream-mapper %v %v", stream, result)
 }

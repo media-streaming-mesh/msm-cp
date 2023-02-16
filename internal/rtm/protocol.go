@@ -18,22 +18,23 @@ package rtm
 
 import (
 	"context"
-	"errors"
-
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
 )
 
 // API provides external access to
 type API interface {
-	Send(srv pb.MsmControlPlane_SendServer) error
+	OnAdd(stream *pb.Message)
+	OnAddExternalClient(stream *pb.Message, stubData pb.Message)
+	OnDelete(stream *pb.Message) *model.StreamData
+	OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *model.StreamData
 }
 
 // Protocol holds the rtm protocol specific data structures
 type Protocol struct {
-	cfg *config.Cfg
-
+	cfg  *config.Cfg
 	rtsp *rtsp.RTSP
 }
 
@@ -52,13 +53,41 @@ func New(cfg *config.Cfg) *Protocol {
 	}
 }
 
-func (p *Protocol) Send(srv pb.MsmControlPlane_SendServer) error {
+func (p *Protocol) OnAdd(stream *pb.Message) {
 	proto := p.cfg.Protocol
-
 	switch proto {
 	case "rtsp":
-		return p.rtsp.Send(srv)
+		p.rtsp.OnConnOpen(stream)
 	default:
-		return errors.New("failed to get rtm protocol type from config")
 	}
+}
+
+func (p *Protocol) OnAddExternalClient(stream *pb.Message, stubData pb.Message) {
+	proto := p.cfg.Protocol
+	switch proto {
+	case "rtsp":
+		p.rtsp.OnExternalClientConnOpen(stream, stubData)
+	default:
+	}
+}
+
+func (p *Protocol) OnDelete(stream *pb.Message) *model.StreamData {
+	proto := p.cfg.Protocol
+	switch proto {
+	case "rtsp":
+		return p.rtsp.OnConnClose(stream)
+	default:
+	}
+	return nil
+}
+
+func (p *Protocol) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *model.StreamData {
+	proto := p.cfg.Protocol
+	switch proto {
+	case "rtsp":
+		return p.rtsp.OnData(conn, stream)
+	default:
+	}
+
+	return nil
 }

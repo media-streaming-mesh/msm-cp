@@ -18,10 +18,10 @@ package rtsp
 
 import (
 	"errors"
-
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/internal/model"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -97,16 +97,13 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 }
 
 func (r *RTSP) handleResponse(res *base.Response, s *pb.Message) error {
-
 	key := getRemoteIPv4Address(s.Remote)
-	stubConn, ok := r.stubConn.Load(key)
+	stubConn, ok := model.StubMap.Load(key)
 	if !ok {
-		r.logger.Errorf("This is just bad")
-		return errors.New("shit2")
+		return errors.New("Can't find stub connection")
 	}
 
-	stubConn.(*StubConnection).dataCh <- res
-
+	stubConn.(*model.StubConnection).DataCh <- res
 	return nil
 }
 
