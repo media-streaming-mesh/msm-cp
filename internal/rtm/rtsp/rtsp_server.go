@@ -156,15 +156,18 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 	errRes := res.Read(resReader)
 
 	if errReq != nil && errRes != nil {
-		r.logger.Errorf("request error=%s", errReq)
-		r.logger.Errorf("response error=%s", errRes)
+		r.logger.Errorf("[RTSP] request error=%s", errReq)
+		r.logger.Errorf("[RTSP] response error=%s", errRes)
 	} else if errReq == nil {
 		//Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
 		if len(clientPorts) != 0 {
 			connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
+			client := r.clientMap[connectionKey]
 			r.clientMap[connectionKey] = Client{
+				clientIp:    client.clientIp,
 				clientPorts: clientPorts,
+				serverIp:    client.serverIp,
 			}
 		}
 
@@ -174,7 +177,8 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a client-side request
 		pbMsg, err := r.handleRequest(req, stream)
 		if err != nil {
-			r.logger.Errorf("handle request error=%s", err)
+			r.logger.Errorf("[RTSP] handle request error=%s", err)
+			return nil
 		}
 		pbMsg.Write(data)
 		pbRes := &pb.Message{
@@ -184,12 +188,12 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 			Data:   fmt.Sprintf("%s", data),
 		}
 
-		r.logger.Debugf("response to client is %v", pbRes)
+		r.logger.Debugf("[RTSP] response to client is %v", pbRes)
 
 		//Send response back to client
 		err = conn.Send(pbRes)
 		if err != nil {
-			r.logger.Errorf("could not send response, error: %v", err)
+			r.logger.Errorf("[RTSP] could not send response, error: %v", err)
 			return nil
 		}
 
@@ -205,7 +209,8 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a server-side response
 		err := r.handleResponse(res, stream)
 		if err != nil {
-			r.logger.Errorf("incoming request error=%s", err)
+			r.logger.Errorf("[RTSP] incoming request error=%s", err)
+			return nil
 		}
 	}
 	return streamData
@@ -227,8 +232,8 @@ func (r *RTSP) getStreamData(stream *pb.Message, streamState model.StreamState) 
 	serverPorts := getServerPorts(s_rc.response[Setup].Header["Transport"])
 	client := r.clientMap[getRTSPConnectionKey(stream.Local, stream.Remote)]
 
-	r.logger.Debugf("server address/ports %v %v", serverAddress, serverPorts)
-	r.logger.Debugf("client address/ports %v %v", clientAddress, client.clientPorts)
+	r.logger.Debugf("[RTSP] server address/ports %v %v", serverAddress, serverPorts)
+	r.logger.Debugf("[RTSP] client address/ports %v %v", clientAddress, client.clientPorts)
 
 	streamData := model.StreamData{
 		"",

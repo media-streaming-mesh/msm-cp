@@ -151,7 +151,11 @@ func (s *StubHandler) OnAddExternalClient(conn pb.MsmControlPlane_SendServer, st
 	s.rtmImpl.OnAddExternalClient(stream, sc.(*model.StubConnection).Data)
 
 	//Add clients to stub
-	sc.(*model.StubConnection).Clients[stream.Remote] = remoteAddr
+	sc.(*model.StubConnection).Clients[stream.Remote] = model.Client{
+		stream.Remote,
+		remoteAddr,
+		0,
+	}
 	s.log("Save client %v with key %v to stub %v", remoteAddr, stream.Remote, stubAddr)
 }
 
@@ -173,10 +177,8 @@ func (s *StubHandler) OnDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Me
 	}
 
 	//Send delete to proxy
-	s.log("Stream data %v", streamData)
 	if streamData != nil {
-		stubAddress := s.getStubAddress(streamData.ClientIp)
-		s.log("StubAddress %v", stubAddress)
+		stubAddress := s.getStubAddress(streamData.ClientIp, stream.Remote)
 
 		//TODO: add stub address to stream data and send to stream mapper
 		error := s.streamMapper.ProcessStream(model.StreamData{
@@ -220,7 +222,7 @@ func (s *StubHandler) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Mess
 	s.log("Stream data %v", streamData)
 
 	if streamData != nil {
-		stubAddress := s.getStubAddress(streamData.ClientIp)
+		stubAddress := s.getStubAddress(streamData.ClientIp, stream.Remote)
 		s.log("StubAddress %v", stubAddress)
 
 		//TODO: add stub address to stream data and send to stream mapper
@@ -239,12 +241,12 @@ func (s *StubHandler) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Mess
 	}
 }
 
-func (s *StubHandler) getStubAddress(clientAddress string) string {
+func (s *StubHandler) getStubAddress(clientIp string, clientId string) string {
 	var stubAddress = ""
 	model.StubMap.Range(func(key, value interface{}) bool {
 		stub := value.(*model.StubConnection)
-		for _, address := range stub.Clients {
-			if address == clientAddress {
+		for _, c := range stub.Clients {
+			if c.ClientIp == clientIp && c.ClientId == clientId {
 				stubAddress = key.(string)
 				break
 			}

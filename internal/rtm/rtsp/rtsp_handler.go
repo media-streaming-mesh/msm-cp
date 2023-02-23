@@ -268,6 +268,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 		// Waiting for server pod response with local/remote ports
 		// CP will receive Event_ADD and send value to addCh to unblock channel
 		<-stubConn.(*model.StubConnection).AddCh
+		stubConn.(*model.StubConnection).SendToAddCh = false
 	} else {
 		r.logger.Debugf("Remote endpoint RTSP connection open")
 	}
@@ -443,7 +444,6 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 }
 
 func (r *RTSP) getClientCount(serverEp string) int {
-	r.logger.Debugf("Get client count %v", r.clientMap)
 	count := 0
 	for _, v := range r.clientMap {
 		if v.serverIp == serverEp {

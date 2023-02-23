@@ -18,7 +18,7 @@ type StubConnection struct {
 	SendToAddCh bool
 	AddCh       chan *pb.Message
 	DataCh      chan *base.Response
-	Clients     map[string]string
+	Clients     map[string]Client
 }
 
 func NewStubConnection(address string, conn pb.MsmControlPlane_SendServer) *StubConnection {
@@ -27,7 +27,7 @@ func NewStubConnection(address string, conn pb.MsmControlPlane_SendServer) *Stub
 		Conn:    conn,
 		AddCh:   make(chan *pb.Message, 1),
 		DataCh:  make(chan *base.Response, 1),
-		Clients: make(map[string]string),
+		Clients: make(map[string]Client),
 	}
 }
 

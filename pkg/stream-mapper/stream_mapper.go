@@ -179,7 +179,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		if !exists {
 			return errors.New("[Stream Mapper] Can't find client proxy")
 		}
-		m.log("Client proxy PLAY %v proxy clients %v total clients %v", clientProxy, len(clientProxy.Clients))
+		m.log("Client proxy PLAY proxy clients %v total clients %v", clientProxy, len(clientProxy.Clients))
 		for _, c := range clientProxy.Clients {
 			if c.ClientIp == data.ClientIp && c.Port == data.ClientPorts[0] {
 				endpoint, result := clientDpGrpcClient.UpdateEndpoint(stream.StreamId, data.ClientIp, data.ClientPorts[0])
