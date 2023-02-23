@@ -25,7 +25,12 @@ func NewStreamMapper(logger *logrus.Logger, streamMap *sync.Map) *StreamMapper {
 
 func (m *StreamMapper) log(format string, args ...interface{}) {
 	// keep remote address outside format, since it can contain %
-	m.logger.Debugf("[Stream Mapper] " + fmt.Sprintf(format, args...))
+	m.logger.Infof("[Stream Mapper] " + fmt.Sprintf(format, args...))
+}
+
+func (m *StreamMapper) logError(format string, args ...interface{}) {
+	// keep remote address outside format, since it can contain %
+	m.logger.Errorf("[Stream Mapper] " + fmt.Sprintf(format, args...))
 }
 
 func (m *StreamMapper) ProcessStream(data model.StreamData) error {
@@ -41,15 +46,11 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 	}
 
 	//Check if client/server on same node
-	clientIp := data.StubIp
-	if clientIp == "" {
-		clientIp = data.ClientIp
-	}
-	isOnSameNode := node_mapper.IsOnSameNode(clientIp, data.ServerIp)
-	m.log("server %v and client %v - same node is %v", data.ServerIp, clientIp, isOnSameNode)
+	isOnSameNode := node_mapper.IsOnSameNode(data.StubIp, data.ServerIp)
+	m.log("server %v and client %v - same node is %v", data.ServerIp, data.StubIp, isOnSameNode)
 
 	//Get proxy ip
-	clientProxyIP, err := node_mapper.MapNode(clientIp)
+	clientProxyIP, err := node_mapper.MapNode(data.StubIp)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 	//Create GRPC connection
 	clientGrpcClient, err := transport.SetupClient(clientProxyIP)
 	if err != nil {
-		m.log("Failed to setup GRPC client, error %s\n", err)
+		m.logError("Failed to setup GRPC client, error %s\n", err)
 	}
 	clientDpGrpcClient = transport.Client{
 		m.logger,
@@ -75,7 +76,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 	if !isOnSameNode {
 		serverGrpcClient, err := transport.SetupClient(serverProxyIP)
 		if err != nil {
-			m.log("Failed to setup GRPC client, error %s\n", err)
+			m.logError("Failed to setup GRPC client, error %s\n", err)
 		}
 		serverDpGrpcClient = transport.Client{
 			m.logger,
@@ -102,15 +103,15 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 			if isOnSameNode {
 				// add the stream-mapper to the proxy
 				streamData, result := clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, data.ServerIp, data.ServerPorts[0])
-				m.log("Create stream %v result %v", streamData, *result)
+				m.log("GRPC create stream %v result %v", streamData, *result)
 			} else {
 				// add the stream-mapper to the server proxy
 				streamData, result := serverDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, data.ServerIp, data.ServerPorts[0])
-				m.log("Create server stream %v result %v", streamData, *result)
+				m.log("GRPC create server stream %v result %v", streamData, *result)
 
 				// add the stream-mapper to the client proxy
 				streamData, result = clientDpGrpcClient.CreateStream(streamId, pb_dp.Encap_RTP_UDP, serverProxyIP, data.ServerPorts[0])
-				m.log("Create client stream %v result %v", streamData, *result)
+				m.log("GRPC create client stream %v result %v", streamData, *result)
 
 				// add the server proxy to the proxy map
 				stream.ProxyMap[serverProxyIP] = model.Proxy{
@@ -133,7 +134,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 			if _, exists := stream.ProxyMap[clientProxyIP]; !exists {
 				// add the stream-mapper to the client proxy
 				streamData, result := clientDpGrpcClient.CreateStream(stream.StreamId, pb_dp.Encap_RTP_UDP, serverProxyIP, data.ServerPorts[0])
-				m.log("Create client stream %v result %v", streamData, *result)
+				m.log("GRPC create client stream %v result %v", streamData, *result)
 
 				// add the client proxy to the proxy map
 				stream.ProxyMap[clientProxyIP] = model.Proxy{
@@ -149,11 +150,11 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 
 		if !isOnSameNode && clientProxy.StreamState < model.Play {
 			endpoint, result := serverDpGrpcClient.CreateEndpoint(stream.StreamId, pb_dp.Encap_RTP_UDP, clientProxyIP, 8050)
-			m.log("Created proxy-proxy ep %v result %v", endpoint, *result)
+			m.log("GRPC created proxy-proxy ep %v result %v", endpoint, *result)
 		}
 
 		endpoint, result := clientDpGrpcClient.CreateEndpoint(stream.StreamId, pb_dp.Encap_RTP_UDP, data.ClientIp, data.ClientPorts[0])
-		m.log("Create client ep %v result %v", endpoint, result)
+		m.log("GRPC create client ep %v result %v", endpoint, result)
 
 		//Update streamMap data
 		clientProxy.Clients = append(clientProxy.Clients, model.Client{
@@ -183,7 +184,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		for _, c := range clientProxy.Clients {
 			if c.ClientIp == data.ClientIp && c.Port == data.ClientPorts[0] {
 				endpoint, result := clientDpGrpcClient.UpdateEndpoint(stream.StreamId, data.ClientIp, data.ClientPorts[0])
-				m.log("Update ep %v result %v", endpoint, result)
+				m.log("GRPC update ep %v result %v", endpoint, result)
 
 				if !isOnSameNode && clientProxy.StreamState < model.Play {
 					endpoint2, result := serverDpGrpcClient.UpdateEndpoint(stream.StreamId, clientProxyIP, 8050)
@@ -192,7 +193,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 						StreamState: model.Play,
 						Clients:     clientProxy.Clients,
 					}
-					m.log("Update proxy ep %v result %v", endpoint2, result)
+					m.log("GRPC update proxy ep %v result %v", endpoint2, result)
 				}
 				break
 			}
@@ -215,7 +216,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		for i, c := range clientProxy.Clients {
 			if c.ClientIp == data.ClientIp && c.Port == data.ClientPorts[0] {
 				endpoint, result := clientDpGrpcClient.DeleteEndpoint(stream.StreamId, data.ClientIp, data.ClientPorts[0])
-				m.log("Delete ep %v %v", endpoint, result)
+				m.log("GRPC delete ep %v %v", endpoint, result)
 				clientProxy.Clients = append(clientProxy.Clients[:i], clientProxy.Clients[i+1:]...)
 				break
 			}
@@ -231,7 +232,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		if !isOnSameNode && clientProxy.StreamState < model.Teardown && len(clientProxy.Clients) == 0 {
 			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(stream.StreamId, clientProxyIP, 8050)
 			delete(stream.ProxyMap, clientProxyIP)
-			m.log("Delete ep %v %v", endpoint2, result)
+			m.log("GRPC delete ep %v %v", endpoint2, result)
 		}
 
 		//Delete stream if all clients terminate
@@ -239,14 +240,14 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 			if isOnSameNode {
 				streamData, result := clientDpGrpcClient.DeleteStream(stream.StreamId, data.ServerIp, 8050)
 				m.streamMap.Delete(data.ServerIp)
-				m.log("Delete stream-mapper %v %v", streamData, result)
+				m.log("GRPC delete stream %v %v", streamData, result)
 			} else {
 				streamData, result := serverDpGrpcClient.DeleteStream(stream.StreamId, data.ServerIp, 8050)
 				m.streamMap.Delete(data.ServerIp)
-				m.log("Delete stream-mapper %v %v", streamData, result)
+				m.log("GRPC delete stream %v %v", streamData, result)
 
 				streamData2, result := clientDpGrpcClient.DeleteStream(stream.StreamId, serverProxyIP, 8050)
-				m.log("Delete stream-mapper %v %v", streamData2, result)
+				m.log("GRPC delete stream %v %v", streamData2, result)
 			}
 
 		}

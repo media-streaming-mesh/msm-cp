@@ -100,6 +100,16 @@ func NewRTSP(opts ...Option) *RTSP {
 
 }
 
+func (r *RTSP) log(format string, args ...interface{}) {
+	// keep remote address outside format, since it can contain %
+	r.logger.Infof("[RTSP] " + fmt.Sprintf(format, args...))
+}
+
+func (r *RTSP) logError(format string, args ...interface{}) {
+	// keep remote address outside format, since it can contain %
+	r.logger.Debugf("[RTSP] " + fmt.Sprintf(format, args...))
+}
+
 // called when a connection is opened.
 func (r *RTSP) OnConnOpen(stream *pb.Message) {
 	// create a new RTSP connection and store it
@@ -108,8 +118,8 @@ func (r *RTSP) OnConnOpen(stream *pb.Message) {
 
 	key := getRTSPConnectionKey(stream.Local, stream.Remote)
 	r.rtspConn.Store(key, rc)
-	r.logger.Infof("RTSP connection key %v", key)
-	r.logger.Infof("RTSP connection opened from client %s", stream.Remote)
+	r.log("RTSP connection key %v", key)
+	r.log("RTSP connection opened from client %s", stream.Remote)
 }
 
 // called when a connection is close.
@@ -124,7 +134,7 @@ func (r *RTSP) OnConnClose(stream *pb.Message) *model.StreamData {
 	connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
 	delete(r.clientMap, connectionKey)
 
-	r.logger.Infof("RTSP connection closed from client %s", stream.Remote)
+	r.log("RTSP connection closed from client %s", stream.Remote)
 
 	return streamData
 }
@@ -138,8 +148,8 @@ func (r *RTSP) OnExternalClientConnOpen(stream *pb.Message, stubData pb.Message)
 
 	key := getRTSPConnectionKey(stream.Local, stream.Remote)
 	r.rtspConn.Store(key, rc)
-	r.logger.Infof("RTSP connection key %v", key)
-	r.logger.Infof("RTSP connection opened from external client %s", stream.Remote)
+	r.log("RTSP connection key %v", key)
+	r.log("RTSP connection opened from external client %s", stream.Remote)
 }
 
 func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *model.StreamData {
@@ -156,8 +166,8 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 	errRes := res.Read(resReader)
 
 	if errReq != nil && errRes != nil {
-		r.logger.Errorf("[RTSP] request error=%s", errReq)
-		r.logger.Errorf("[RTSP] response error=%s", errRes)
+		r.logError("request error=%s", errReq)
+		r.logError("response error=%s", errRes)
 	} else if errReq == nil {
 		//Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
@@ -177,7 +187,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a client-side request
 		pbMsg, err := r.handleRequest(req, stream)
 		if err != nil {
-			r.logger.Errorf("[RTSP] handle request error=%s", err)
+			r.logError("handle request error=%s", err)
 			return nil
 		}
 		pbMsg.Write(data)
@@ -188,12 +198,12 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 			Data:   fmt.Sprintf("%s", data),
 		}
 
-		r.logger.Debugf("[RTSP] response to client is %v", pbRes)
+		r.log("response to client is %v", pbRes)
 
 		//Send response back to client
 		err = conn.Send(pbRes)
 		if err != nil {
-			r.logger.Errorf("[RTSP] could not send response, error: %v", err)
+			r.logError("could not send response, error: %v", err)
 			return nil
 		}
 
@@ -209,7 +219,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a server-side response
 		err := r.handleResponse(res, stream)
 		if err != nil {
-			r.logger.Errorf("[RTSP] incoming request error=%s", err)
+			r.logError("incoming request error=%s", err)
 			return nil
 		}
 	}
@@ -232,8 +242,8 @@ func (r *RTSP) getStreamData(stream *pb.Message, streamState model.StreamState) 
 	serverPorts := getServerPorts(s_rc.response[Setup].Header["Transport"])
 	client := r.clientMap[getRTSPConnectionKey(stream.Local, stream.Remote)]
 
-	r.logger.Debugf("[RTSP] server address/ports %v %v", serverAddress, serverPorts)
-	r.logger.Debugf("[RTSP] client address/ports %v %v", clientAddress, client.clientPorts)
+	r.log("server address/ports %v %v", serverAddress, serverPorts)
+	r.log("client address/ports %v %v", clientAddress, client.clientPorts)
 
 	streamData := model.StreamData{
 		"",

@@ -42,7 +42,12 @@ func NewStubHandler(cfg *config.Cfg) *StubHandler {
 
 func (s *StubHandler) log(format string, args ...interface{}) {
 	// keep remote address outside format, since it can contain %
-	s.logger.Debugf("[Stub Handler] " + fmt.Sprintf(format, args...))
+	s.logger.Infof("[Stub Handler] " + fmt.Sprintf(format, args...))
+}
+
+func (s *StubHandler) logError(format string, args ...interface{}) {
+	// keep remote address outside format, since it can contain %
+	s.logger.Errorf("[Stub Handler] " + fmt.Sprintf(format, args...))
 }
 
 func (s *StubHandler) Send(conn pb.MsmControlPlane_SendServer) error {
@@ -51,7 +56,7 @@ func (s *StubHandler) Send(conn pb.MsmControlPlane_SendServer) error {
 		// exit if context is done or continue
 		select {
 		case <-ctx.Done():
-			s.log("reveiced connection done")
+			s.log("received connection done")
 			return ctx.Err()
 		default:
 		}
@@ -60,11 +65,11 @@ func (s *StubHandler) Send(conn pb.MsmControlPlane_SendServer) error {
 		stream, err := conn.Recv()
 		if err == io.EOF {
 			// return will close stream-mapper from server side
-			s.log("found EOF, exiting")
+			s.logError("found EOF, exiting")
 			return nil
 		}
 		if err != nil {
-			s.log("received error %v", err)
+			s.logError("received error %v", err)
 			continue
 		}
 
@@ -181,7 +186,7 @@ func (s *StubHandler) OnDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Me
 		stubAddress := s.getStubAddress(streamData.ClientIp, stream.Remote)
 
 		//TODO: add stub address to stream data and send to stream mapper
-		error := s.streamMapper.ProcessStream(model.StreamData{
+		_ = s.streamMapper.ProcessStream(model.StreamData{
 			StubIp:      stubAddress,
 			ServerIp:    streamData.ServerIp,
 			ClientIp:    streamData.ClientIp,
@@ -190,9 +195,9 @@ func (s *StubHandler) OnDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Me
 			StreamState: streamData.StreamState,
 		})
 
-		if error != nil {
-			s.log("ProcessStream failed %v", error)
-		}
+		//if error != nil {
+		//	s.logError("ProcessStream failed %v", error)
+		//}
 	}
 }
 
@@ -205,7 +210,7 @@ func (s *StubHandler) OnDeleteExternalClient(conn pb.MsmControlPlane_SendServer,
 
 	sc, ok := model.StubMap.Load(stubAddr)
 	if !ok {
-		s.logger.Errorf("[Stub Handler] Gateway stub connection was not found! %v", stubAddr)
+		s.logError("Gateway stub connection was not found! %v", stubAddr)
 		return
 	}
 	delete(sc.(*model.StubConnection).Clients, stream.Remote)
@@ -217,9 +222,6 @@ func (s *StubHandler) OnDeleteExternalClient(conn pb.MsmControlPlane_SendServer,
 func (s *StubHandler) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 	//Process RTSP connection
 	streamData := s.rtmImpl.OnData(conn, stream)
-
-	s.log("Stream  %v", stream)
-	s.log("Stream data %v", streamData)
 
 	if streamData != nil {
 		stubAddress := s.getStubAddress(streamData.ClientIp, stream.Remote)
@@ -236,13 +238,13 @@ func (s *StubHandler) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Mess
 		})
 
 		if error != nil {
-			s.log("ProcessStream failed %v", error)
+			s.logError("ProcessStream failed %v", error)
 		}
 	}
 }
 
 func (s *StubHandler) getStubAddress(clientIp string, clientId string) string {
-	var stubAddress = ""
+	var stubAddress = clientIp
 	model.StubMap.Range(func(key, value interface{}) bool {
 		stub := value.(*model.StubConnection)
 		for _, c := range stub.Clients {

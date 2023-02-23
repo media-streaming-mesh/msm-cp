@@ -32,7 +32,7 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 	var cSeq base.HeaderValue
 
 	if cSeq, ok = req.Header["CSeq"]; !ok || len(cSeq) != 1 {
-		r.logger.Error("CSeq missing")
+		r.logError("CSeq missing")
 
 		return &base.Response{
 			StatusCode: base.StatusBadRequest,
@@ -87,11 +87,11 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 	}
 
 	if err != nil {
-		r.logger.Debugf("error processing CP message")
+		r.logError("error processing CP message")
 		return nil, err
 	} else {
 		// reflect back the cSeq
-		r.logger.Debugf("cseq = %v", cSeq)
+		r.log("cseq = %v", cSeq)
 		res.Header["CSeq"] = cSeq
 		return res, nil
 	}
