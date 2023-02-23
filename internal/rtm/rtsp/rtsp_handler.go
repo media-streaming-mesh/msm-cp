@@ -39,6 +39,7 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 	if err != nil {
 		// handle error
 		// res := &base.Response { bad request or something}
+		r.logger.Debugf("unable to connect to remote")
 		return nil, err
 	}
 	return res, nil
@@ -230,7 +231,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	// 1. Find the remote endpoint to connect
 	ep, err := r.getEndpointFromPath(req.URL)
 	if err != nil {
-		r.logger.Errorf("could not find endpoint")
+		r.logger.Errorf("could not find endpoint to connect to")
 		// res := &base.Response { bad request or something}
 		return nil, err
 	}
@@ -520,7 +521,7 @@ func isInterleaved(value base.HeaderValue) bool {
 func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
 	ep, err := r.getEndpointFromPath(url)
 	if err != nil {
-		r.logger.Errorf("could not find endpoint")
+		r.logger.Errorf("could not get endpoint from path")
 		return url
 	}
 	// url.Host = fmt.Sprintf("%s:554", ep)
