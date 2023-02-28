@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	"net"
 	"strconv"
 	"strings"
@@ -243,7 +243,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	}
 
 	// 3. Find stub connection for given path
-	stubConn, ok := model.StubMap.Load(host)
+	stubConn, ok := stub.StubMap.Load(host)
 	if !ok {
 		r.logError("could not find stub connection for endpoint")
 		return nil, errors.New("stub connection not found")
@@ -256,18 +256,18 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 			Event:  pb.Event_REQUEST,
 			Remote: ep,
 		}
-		stubConn.(*model.StubConnection).Conn.Send(addMsg)
+		stubConn.(*stub.StubConnection).Conn.Send(addMsg)
 
 		// Waiting for server pod response with local/remote ports
 		// CP will receive Event_ADD and send value to addCh to unblock channel
-		<-stubConn.(*model.StubConnection).AddCh
-		stubConn.(*model.StubConnection).SendToAddCh = false
+		<-stubConn.(*stub.StubConnection).AddCh
+		stubConn.(*stub.StubConnection).SendToAddCh = false
 	} else {
 		r.log("Remote endpoint RTSP connection open")
 	}
 
 	// 5. Update target to client pod
-	messageData := stubConn.(*model.StubConnection).Data
+	messageData := stubConn.(*stub.StubConnection).Data
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
@@ -305,9 +305,9 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 			Data:   fmt.Sprintf("%s", data),
 		}
 
-		stubConn.(*model.StubConnection).Conn.Send(optionsMsg)
+		stubConn.(*stub.StubConnection).Conn.Send(optionsMsg)
 		r.log("waiting on options response")
-		res := <-stubConn.(*model.StubConnection).DataCh
+		res := <-stubConn.(*stub.StubConnection).DataCh
 
 		// Update remote RTSP Connection
 		s_rc.state = Options
@@ -329,7 +329,7 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	}
 
 	stubAddr := sc.(*RTSPConnection).targetAddr
-	stubConn, ok := model.StubMap.Load(stubAddr)
+	stubConn, ok := stub.StubMap.Load(stubAddr)
 	if !ok {
 		return nil, errors.New("can't load stub connection")
 	}
@@ -337,14 +337,14 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
 
-	stubConn.(*model.StubConnection).Conn.Send(&pb.Message{
+	stubConn.(*stub.StubConnection).Conn.Send(&pb.Message{
 		Event:  pb.Event_DATA,
 		Local:  sc.(*RTSPConnection).targetLocal,
 		Remote: sc.(*RTSPConnection).targetRemote,
 		Data:   fmt.Sprintf("%s", data),
 	})
 
-	res := <-stubConn.(*model.StubConnection).DataCh
+	res := <-stubConn.(*stub.StubConnection).DataCh
 
 	return res, nil
 }

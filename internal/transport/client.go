@@ -4,28 +4,7 @@ import (
 	"context"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
-
-var streamId StreamId
-
-// Stream id type uint32 auto increment
-type StreamId struct {
-	sync.Mutex
-	id uint32
-}
-
-func (si *StreamId) ID() (id uint32) {
-	si.Lock()
-	defer si.Unlock()
-	id = si.id
-	si.id++
-	return
-}
-
-func GetStreamID() uint32 {
-	return streamId.ID()
-}
 
 // Client holds the client specific data structures
 type Client struct {

@@ -7,7 +7,7 @@ package core
 
 import (
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
+	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 )
 
@@ -17,12 +17,11 @@ func InitApp() (*App, error) {
 	cfg := config.New()
 	nodeMapper := &node_mapper.NodeMapper{}
 	nodeMapper.InitializeNodeMapper()
-
-	stubHandler := stub.NewStubHandler(cfg)
+	protocol := rtm.New(cfg)
 
 	app := &App{
 		cfg:     cfg,
-		stubImpl: stubHandler,
+		rtmImpl: protocol,
 		nodeMapper: nodeMapper,
 	}
 	return app, nil

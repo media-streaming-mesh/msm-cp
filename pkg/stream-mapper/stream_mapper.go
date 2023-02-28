@@ -11,6 +11,14 @@ import (
 	"sync"
 )
 
+var streamId StreamId
+
+// Stream id type uint32 auto increment
+type StreamId struct {
+	sync.Mutex
+	id uint32
+}
+
 type StreamMapper struct {
 	logger    *logrus.Logger
 	streamMap *sync.Map
@@ -24,12 +32,10 @@ func NewStreamMapper(logger *logrus.Logger, streamMap *sync.Map) *StreamMapper {
 }
 
 func (m *StreamMapper) log(format string, args ...interface{}) {
-	// keep remote address outside format, since it can contain %
 	m.logger.Infof("[Stream Mapper] " + fmt.Sprintf(format, args...))
 }
 
 func (m *StreamMapper) logError(format string, args ...interface{}) {
-	// keep remote address outside format, since it can contain %
 	m.logger.Errorf("[Stream Mapper] " + fmt.Sprintf(format, args...))
 }
 
@@ -91,7 +97,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 
 		//Send Create Stream to proxy
 		if savedStream == nil {
-			streamId := model.GetStreamID()
+			streamId := GetStreamID()
 			m.log("stream Id %v", streamId)
 
 			//Create new stream
@@ -269,4 +275,16 @@ func (m *StreamMapper) getClientCount(serverEp string) int {
 		}
 	}
 	return count
+}
+
+func (si *StreamId) ID() (id uint32) {
+	si.Lock()
+	defer si.Unlock()
+	id = si.id
+	si.id++
+	return
+}
+
+func GetStreamID() uint32 {
+	return streamId.ID()
 }

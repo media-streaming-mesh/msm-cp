@@ -22,6 +22,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
+	"google.golang.org/grpc/peer"
+	"net"
 	"strings"
 	"sync"
 
@@ -110,11 +113,36 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 	r.logger.Debugf("[RTSP] " + fmt.Sprintf(format, args...))
 }
 
+func (r *RTSP) Send(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
+	switch stream.Event {
+	case pb.Event_ADD:
+		r.onAdd(conn, stream)
+	case pb.Event_DELETE:
+		streamData := r.onDelete(stream)
+		return streamData, nil
+	case pb.Event_DATA:
+		return r.onData(conn, stream)
+	default:
+	}
+	return nil, nil
+}
+
 // called when a connection is opened.
-func (r *RTSP) OnConnOpen(stream *pb.Message) {
+func (r *RTSP) onAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+	//Get stub connection
+	ctx := conn.Context()
+	p, _ := peer.FromContext(ctx)
+	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
+	sc, ok := stub.StubMap.Load(stubAddr)
+
 	// create a new RTSP connection and store it
 	rc := newRTSPConnection(r.logger)
 	rc.author = stream.Remote
+
+	if ok && sc != nil {
+		rc.targetLocal = sc.(*stub.StubConnection).Data.Local
+		rc.targetRemote = sc.(*stub.StubConnection).Data.Remote
+	}
 
 	key := getRTSPConnectionKey(stream.Local, stream.Remote)
 	r.rtspConn.Store(key, rc)
@@ -123,7 +151,7 @@ func (r *RTSP) OnConnOpen(stream *pb.Message) {
 }
 
 // called when a connection is close.
-func (r *RTSP) OnConnClose(stream *pb.Message) *model.StreamData {
+func (r *RTSP) onDelete(stream *pb.Message) *model.StreamData {
 	// Get stream data
 	streamData := r.getStreamData(stream, model.Teardown)
 	// Find RTSP connection and delete it
@@ -133,26 +161,12 @@ func (r *RTSP) OnConnClose(stream *pb.Message) *model.StreamData {
 	//Delete client from client map
 	connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
 	delete(r.clientMap, connectionKey)
-
 	r.log("RTSP connection closed from client %s", stream.Remote)
 
 	return streamData
 }
 
-func (r *RTSP) OnExternalClientConnOpen(stream *pb.Message, stubData pb.Message) {
-	// create a new RTSP connection and store it
-	rc := newRTSPConnection(r.logger)
-	rc.author = stream.Remote
-	rc.targetLocal = stubData.Local
-	rc.targetRemote = stubData.Remote
-
-	key := getRTSPConnectionKey(stream.Local, stream.Remote)
-	r.rtspConn.Store(key, rc)
-	r.log("RTSP connection key %v", key)
-	r.log("RTSP connection opened from external client %s", stream.Remote)
-}
-
-func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *model.StreamData {
+func (r *RTSP) onData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
 	//Read stream data
 	var streamData *model.StreamData
 	var data = bytes.NewBuffer(make([]byte, 0, 4096))
@@ -166,8 +180,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 	errRes := res.Read(resReader)
 
 	if errReq != nil && errRes != nil {
-		r.logError("request error=%s", errReq)
-		r.logError("response error=%s", errRes)
+		return nil, fmt.Errorf("request error=%s response error=%s", errRes, errRes)
 	} else if errReq == nil {
 		//Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
@@ -187,8 +200,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a client-side request
 		pbMsg, err := r.handleRequest(req, stream)
 		if err != nil {
-			r.logError("handle request error=%s", err)
-			return nil
+			return nil, fmt.Errorf("handle request error=%s", err)
 		}
 		pbMsg.Write(data)
 		pbRes := &pb.Message{
@@ -203,8 +215,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		//Send response back to client
 		err = conn.Send(pbRes)
 		if err != nil {
-			r.logError("could not send response, error: %v", err)
-			return nil
+			return nil, fmt.Errorf("send response error=%s", err)
 		}
 
 		//Get stream data
@@ -219,11 +230,10 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) *m
 		// received a server-side response
 		err := r.handleResponse(res, stream)
 		if err != nil {
-			r.logError("incoming request error=%s", err)
-			return nil
+			return nil, fmt.Errorf("handle response error=%s", err)
 		}
 	}
-	return streamData
+	return streamData, nil
 }
 
 func (r *RTSP) getStreamData(stream *pb.Message, streamState model.StreamState) *model.StreamData {
