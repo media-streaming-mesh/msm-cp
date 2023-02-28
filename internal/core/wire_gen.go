@@ -16,7 +16,7 @@ import (
 func InitApp() (*App, error) {
 	cfg := config.New()
 	nodeMapper := &node_mapper.NodeMapper{}
-	nodeMapper.InitializeNodeMapper()
+	nodeMapper.InitializeNodeMapper(cfg)
 	protocol := rtm.New(cfg)
 
 	app := &App{

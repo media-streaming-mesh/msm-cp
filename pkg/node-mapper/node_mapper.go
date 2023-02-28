@@ -3,6 +3,8 @@ package node_mapper
 import (
 	"context"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/sirupsen/logrus"
 	"log"
 	"net"
 	"sync"
@@ -20,9 +22,10 @@ var (
 
 type NodeMapper struct {
 	clientset kubernetes.Interface
+	logger    *logrus.Logger
 }
 
-func (mapper *NodeMapper) InitializeNodeMapper() {
+func (mapper *NodeMapper) InitializeNodeMapper(cfg *config.Cfg) {
 	NodeMap = new(sync.Map)
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
@@ -35,6 +38,7 @@ func (mapper *NodeMapper) InitializeNodeMapper() {
 	}
 
 	mapper.clientset = clientset
+	mapper.logger = cfg.Logger
 	go func() {
 		mapper.watchNode()
 	}()
@@ -42,7 +46,12 @@ func (mapper *NodeMapper) InitializeNodeMapper() {
 
 func (mapper *NodeMapper) log(format string, args ...interface{}) {
 	// keep remote address outside format, since it can contain %
-	log.Println("[Node Mapper] " + fmt.Sprintf(format, args...))
+	mapper.logger.Infof("[Node Mapper] " + fmt.Sprintf(format, args...))
+}
+
+func (mapper *NodeMapper) logError(format string, args ...interface{}) {
+	// keep remote address outside format, since it can contain %
+	mapper.logger.Errorf("[Node Mapper] " + fmt.Sprintf(format, args...))
 }
 
 func MapNode(ip string) (string, error) {
@@ -77,7 +86,7 @@ func IsOnSameNode(ip string, ip2 string) bool {
 func (mapper *NodeMapper) watchNode() {
 	watcher, err := mapper.clientset.CoreV1().Nodes().Watch(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		mapper.log("watcher err %v", err)
+		mapper.logError("watcher err %v", err)
 	}
 	ch := watcher.ResultChan()
 
