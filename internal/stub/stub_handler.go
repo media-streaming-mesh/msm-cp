@@ -6,7 +6,6 @@ import (
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 	"net"
@@ -63,20 +62,8 @@ func (s *StubHandler) logError(format string, args ...interface{}) {
 	s.logger.Errorf("[Stub Handler] " + fmt.Sprintf(format, args...))
 }
 
-func (s *StubHandler) Send(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
-	switch stream.Event {
-	case pb.Event_REGISTER:
-		s.onRegistration(conn)
-	case pb.Event_ADD:
-		s.onAdd(conn, stream)
-	case pb.Event_DELETE:
-		s.onDelete(conn, stream)
-	default:
-	}
-}
-
 // Call when receive REGISTRATION event
-func (s *StubHandler) onRegistration(conn pb.MsmControlPlane_SendServer) {
+func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp string) {
 
 	// get remote ip addr
 	ctx := conn.Context()
@@ -86,15 +73,12 @@ func (s *StubHandler) onRegistration(conn pb.MsmControlPlane_SendServer) {
 	sc := NewStubConnection(remoteAddr, conn)
 
 	//Send node ip address to stub
-	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
-	s.log("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
-	if err == nil {
-		configMsg := &pb.Message{
-			Event:  pb.Event_CONFIG,
-			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
-		}
-		sc.Conn.Send(configMsg)
+	s.log("Send msm-proxy ip %v:8050 to %v", proxyIp, remoteAddr)
+	configMsg := &pb.Message{
+		Event:  pb.Event_CONFIG,
+		Remote: fmt.Sprintf("%s:8050", proxyIp),
 	}
+	sc.Conn.Send(configMsg)
 
 	// save stub connection on a sync.Map
 	StubMap.Store(remoteAddr, sc)
@@ -102,7 +86,7 @@ func (s *StubHandler) onRegistration(conn pb.MsmControlPlane_SendServer) {
 }
 
 // Call when receive ADD event
-func (s *StubHandler) onAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (s *StubHandler) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 
 	//Stub send to add channel
 	stubAddr := util.GetRemoteIPv4Address(stream.Remote)
@@ -140,7 +124,7 @@ func (s *StubHandler) onAddExternalClient(conn pb.MsmControlPlane_SendServer, st
 }
 
 // Call when receive DELETE event
-func (s *StubHandler) onDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (s *StubHandler) OnDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 	//Stub unblock add chanel
 	stubAddr := util.GetRemoteIPv4Address(stream.Remote)
 	sc, ok := StubMap.Load(stubAddr)

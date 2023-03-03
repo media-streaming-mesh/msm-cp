@@ -19,7 +19,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"net"
 	"os"
@@ -34,7 +33,7 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	rtmImpl    rtm.API
+	grpcImpl   API
 	nodeMapper *node_mapper.NodeMapper
 }
 
@@ -67,7 +66,7 @@ func (a *App) Start() error {
 		transport.UseContext(ctx),
 		transport.UseLogger(logger),
 		transport.UseListener(ln),
-		transport.UseGrpcImpl(a.rtmImpl),
+		transport.UseGrpcImpl(a.grpcImpl),
 	}
 
 	var startTransportErr = make(chan error)

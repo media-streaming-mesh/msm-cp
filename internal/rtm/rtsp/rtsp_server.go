@@ -113,22 +113,8 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 	r.logger.Debugf("[RTSP] " + fmt.Sprintf(format, args...))
 }
 
-func (r *RTSP) Send(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
-	switch stream.Event {
-	case pb.Event_ADD:
-		r.onAdd(conn, stream)
-	case pb.Event_DELETE:
-		streamData := r.onDelete(stream)
-		return streamData, nil
-	case pb.Event_DATA:
-		return r.onData(conn, stream)
-	default:
-	}
-	return nil, nil
-}
-
 // called when a connection is opened.
-func (r *RTSP) onAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (r *RTSP) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 	//Get stub connection
 	ctx := conn.Context()
 	p, _ := peer.FromContext(ctx)
@@ -151,7 +137,7 @@ func (r *RTSP) onAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 }
 
 // called when a connection is close.
-func (r *RTSP) onDelete(stream *pb.Message) *model.StreamData {
+func (r *RTSP) OnDelete(stream *pb.Message) (*model.StreamData, error) {
 	// Get stream data
 	streamData := r.getStreamData(stream, model.Teardown)
 	// Find RTSP connection and delete it
@@ -163,10 +149,10 @@ func (r *RTSP) onDelete(stream *pb.Message) *model.StreamData {
 	delete(r.clientMap, connectionKey)
 	r.log("RTSP connection closed from client %s", stream.Remote)
 
-	return streamData
+	return streamData, nil
 }
 
-func (r *RTSP) onData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
+func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
 	//Read stream data
 	var streamData *model.StreamData
 	var data = bytes.NewBuffer(make([]byte, 0, 4096))
