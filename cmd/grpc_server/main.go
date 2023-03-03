@@ -39,10 +39,10 @@ func (s *server) Send(srv pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 
-		// receive data from stream
+		// receive data from stream-mapper
 		stream, err := srv.Recv()
 		if err == io.EOF {
-			// return will close stream from server side
+			// return will close stream-mapper from server side
 			return nil
 		}
 		if err != nil {

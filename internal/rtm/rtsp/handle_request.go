@@ -18,10 +18,10 @@ package rtsp
 
 import (
 	"errors"
-
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -32,7 +32,7 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 	var cSeq base.HeaderValue
 
 	if cSeq, ok = req.Header["CSeq"]; !ok || len(cSeq) != 1 {
-		r.logger.Error("CSeq missing")
+		r.logError("CSeq missing")
 
 		return &base.Response{
 			StatusCode: base.StatusBadRequest,
@@ -87,27 +87,24 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 	}
 
 	if err != nil {
-		r.logger.Debugf("error processing CP message")
+		r.logError("error processing CP message")
 		return nil, err
 	} else {
 		// reflect back the cSeq
-		r.logger.Debugf("cseq = %v", cSeq)
+		r.log("cseq = %v", cSeq)
 		res.Header["CSeq"] = cSeq
 		return res, nil
 	}
 }
 
 func (r *RTSP) handleResponse(res *base.Response, s *pb.Message) error {
-
 	key := getRemoteIPv4Address(s.Remote)
-	stubConn, ok := r.stubConn.Load(key)
+	stubConn, ok := stub.StubMap.Load(key)
 	if !ok {
-		r.logger.Errorf("This is just bad")
-		return errors.New("shit2")
+		return errors.New("Can't find stub connection")
 	}
 
-	stubConn.(*StubConnection).dataCh <- res
-
+	stubConn.(*stub.StubConnection).DataCh <- res
 	return nil
 }
 

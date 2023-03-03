@@ -26,7 +26,6 @@ import (
 	"syscall"
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 )
 
@@ -34,7 +33,7 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	rtmImpl    rtm.API
+	grpcImpl   API
 	nodeMapper *node_mapper.NodeMapper
 }
 
@@ -67,7 +66,7 @@ func (a *App) Start() error {
 		transport.UseContext(ctx),
 		transport.UseLogger(logger),
 		transport.UseListener(ln),
-		transport.UseGrpcImpl(a.rtmImpl),
+		transport.UseGrpcImpl(a.grpcImpl),
 	}
 
 	var startTransportErr = make(chan error)

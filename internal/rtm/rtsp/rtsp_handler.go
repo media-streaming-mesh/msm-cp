@@ -20,157 +20,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"google.golang.org/grpc/peer"
 )
-
-// called when a connection is opened.
-func (r *RTSP) OnRegistration(server pb.MsmControlPlane_SendServer) {
-
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	remoteAddr, _, _ := net.SplitHostPort(p.Addr.String())
-
-	sc := &StubConnection{
-		conn:    server,
-		addCh:   make(chan *pb.Message, 1),
-		dataCh:  make(chan *base.Response, 1),
-		clients: make(map[string]string),
-	}
-
-	//Send node ip address to stub
-	dataplaneIP, err := node_mapper.MapNode(remoteAddr)
-	r.logger.Debugf("Send msm-proxy ip %v:8050 to %v", dataplaneIP, remoteAddr)
-	if err == nil {
-		configMsg := &pb.Message{
-			Event:  pb.Event_CONFIG,
-			Remote: fmt.Sprintf("%s:8050", dataplaneIP),
-		}
-		sc.conn.Send(configMsg)
-	}
-
-	// save stub connection on a sync.Map
-	r.stubConn.Store(remoteAddr, sc)
-	r.logger.Infof("Connection for client: %s successfully registered", remoteAddr)
-}
-
-// called when a connection is opened.
-func (r *RTSP) OnConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-
-	// create a new RTSP connection and store it
-	sc := newRTSPConnection(r.logger)
-	stubAddr := getRemoteIPv4Address(msg.Remote)
-	sc.author = msg.Remote
-
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	r.rtspConn.Store(key, sc)
-	r.logger.Infof("RTSP connection key %v", key)
-	r.logger.Infof("RTSP connection opened from client %s", msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.OnExternalClientConnOpen(server, msg)
-		return
-	}
-	srv.(*StubConnection).data = *msg
-	srv.(*StubConnection).addCh <- msg
-	r.logger.Infof("StubConnection open channel %v", msg)
-}
-
-// called when a connection is close.
-func (r *RTSP) OnConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	//update rtsp state
-	rc, _ := r.getClientRTSPConnection(msg)
-	if rc.state != Teardown {
-		rc.state = Teardown
-		//Send DELETE_EP to msm-proxy
-		if rc.targetAddr != "" {
-			if err := r.SendProxyData(msg, make([]uint32, 0)); err != nil {
-				r.logger.Errorf("Could not send proxy data %v", err)
-			}
-		}
-	}
-
-	// For client RTSP, read from channel to unblock write
-	if rc.targetAddr != "" {
-		stubAddr := getRemoteIPv4Address(msg.Remote)
-		srv, ok := r.stubConn.Load(stubAddr)
-		if ok {
-			r.logger.Infof("Unblock write channel for %v", msg.Remote)
-			<-srv.(*StubConnection).addCh
-		} else {
-			r.OnExternalClientConnClose(server, msg)
-		}
-	}
-
-	// find RTSP connection and delete it
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	r.rtspConn.Delete(key)
-
-	r.logger.Infof("RTSP connection closed from client %s", msg.Remote)
-}
-
-func (r *RTSP) OnExternalClientConnOpen(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	remoteAddr := getRemoteIPv4Address(msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
-		return
-	}
-	srv.(*StubConnection).clients[msg.Remote] = remoteAddr
-
-	key := getRTSPConnectionKey(msg.Local, msg.Remote)
-	rc, ok := r.rtspConn.Load(key)
-	if ok {
-		messageData := srv.(*StubConnection).data
-		rc.(*RTSPConnection).targetLocal = messageData.Local
-		rc.(*RTSPConnection).targetRemote = messageData.Remote
-	}
-
-	r.logger.Infof("Connection for external client: %s successfully open", remoteAddr)
-	r.logger.Infof("Save client %v with key %v to stub %v", remoteAddr, msg.Remote, stubAddr)
-}
-
-func (r *RTSP) OnExternalClientConnClose(server pb.MsmControlPlane_SendServer, msg *pb.Message) {
-	// get remote ip addr
-	ctx := server.Context()
-	p, _ := peer.FromContext(ctx)
-	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	remoteAddr := getRemoteIPv4Address(msg.Remote)
-
-	srv, ok := r.stubConn.Load(stubAddr)
-	if !ok {
-		r.logger.Errorf("gateway stub connection was not found! %v", stubAddr)
-		return
-	}
-	delete(srv.(*StubConnection).clients, msg.Remote)
-	r.logger.Infof("Connection for external client: %s successfully close", remoteAddr)
-	r.logger.Infof("Delete client %v with key %v from stub %v", remoteAddr, msg.Remote, stubAddr)
-}
-
-// called when a session is opened.
-func (r *RTSP) OnSessionOpen() {
-	// save session
-}
-
-// called when a session is closed.
-func (r *RTSP) OnSessionClose() {
-	log.Printf("session closed")
-
-}
 
 // called after receiving an OPTIONS request.
 func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, error) {
@@ -181,7 +38,7 @@ func (r *RTSP) OnOptions(req *base.Request, s *pb.Message) (*base.Response, erro
 	if err != nil {
 		// handle error
 		// res := &base.Response { bad request or something}
-		r.logger.Debugf("unable to connect to remote")
+		r.logError("unable to connect to remote")
 		return nil, err
 	}
 	return res, nil
@@ -202,11 +59,11 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	originalURL := req.URL.String()
 
 	if s_rc.state < Describe {
-		r.logger.Debugf("RTSPConnection connection state not DESCRIBE")
+		r.log("RTSPConnection connection state not DESCRIBE")
 
 		req.URL = r.updateURLIpAddress(req.URL)
 		res, err := r.clientToServer(req, s)
-		r.logger.Debugf("[s->c] DESCRIBE RESPONSE %+v", res)
+		r.log("[s->c] DESCRIBE RESPONSE %+v", res)
 
 		s_rc.state = Describe
 		s_rc.response[Describe] = res
@@ -214,7 +71,7 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 	}
 
 	s_rc.response[Describe].Header["Content-Base"] = base.HeaderValue{originalURL}
-	r.logger.Debugf("[s->c] updated DESCRIBE RESPONSE %+v", s_rc.response[Describe])
+	r.log("[s->c] updated DESCRIBE RESPONSE %+v", s_rc.response[Describe])
 
 	return s_rc.response[Describe], s_rc.responseErr[Describe]
 }
@@ -223,7 +80,7 @@ func (r *RTSP) OnDescribe(req *base.Request, s *pb.Message) (*base.Response, err
 func (r *RTSP) OnAnnounce(req *base.Request, s *pb.Message) (*base.Response, error) {
 	r.logger.Debugf("[c->s] %+v", req)
 	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] ANNOUNCE RESPONSE %+v", res)
+	r.log("[s->c] ANNOUNCE RESPONSE %+v", res)
 
 	return res, err
 }
@@ -246,24 +103,24 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 	interleaved := isInterleaved(req.Header["Transport"])
 
 	if s_rc.state < Setup {
-		r.logger.Debugf("RTSPConnection connection state not SETUP")
-		r.logger.Debugf("client header = %v", req.Header)
+		r.log("RTSPConnection connection state not SETUP")
+		r.log("client header = %v", req.Header)
 
 		if interleaved == false {
 			// will need to be able to assign other channel values
 			// always interleaved towards the server (for now)
 			req.Header["Transport"] = base.HeaderValue{"RTP/AVP/TCP;unicast;interleaved=0-1"}
-			r.logger.Debugf("server header = %v", req.Header)
+			r.log("server header = %v", req.Header)
 		}
 
 		res, err := r.clientToServer(req, s)
-		r.logger.Debugf("[s->c] SETUP RESPONSE %+v", res)
+		r.log("[s->c] SETUP RESPONSE %+v", res)
 
 		//If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
 		describeResponse := s_rc.response[Describe]
 		if strings.Contains(describeResponse.String(), "trackID=1") && s_rc.response[Setup] == nil {
-			r.logger.Debugf("RTSPConnection connection has both audio and video")
+			r.log("RTSPConnection connection has both audio and video")
 		} else {
 			s_rc.state = Setup
 		}
@@ -278,7 +135,7 @@ func (r *RTSP) OnSetup(req *base.Request, s *pb.Message) (*base.Response, error)
 		s_rc.response[Setup].Header["Transport"] = base.HeaderValue{"RTP/AVP;unicast;client_port=" + ports + ";server_port=8050-8051"}
 	}
 
-	r.logger.Debugf("modified setup response is %v", s_rc.response[Setup])
+	r.log("modified setup response is %v", s_rc.response[Setup])
 
 	return s_rc.response[Setup], s_rc.responseErr[Setup]
 }
@@ -296,9 +153,9 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 	}
 
 	if s_rc.state < Play {
-		r.logger.Debugf("RTSPConnection connection state not PLAY")
+		r.log("RTSPConnection connection state not PLAY")
 		res, err := r.clientToServer(req, s)
-		r.logger.Debugf("[s->c] PLAY RESPONSE %+v", res)
+		r.log("[s->c] PLAY RESPONSE %+v", res)
 
 		s_rc.state = Play
 		s_rc.response[Play] = res
@@ -310,18 +167,17 @@ func (r *RTSP) OnPlay(req *base.Request, s *pb.Message) (*base.Response, error) 
 
 // called after receiving a PAUSE request.
 func (r *RTSP) OnPause(req *base.Request, s *pb.Message) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] PAUSE RESPONSE %+v", res)
+	r.log("[s->c] PAUSE RESPONSE %+v", res)
 
 	return res, err
 }
 
 // called after receiving a RECORD request.
 func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
-	log.Printf("record request")
-
+	r.log("record request")
 	return &base.Response{
 		StatusCode: base.StatusOK,
 		Header:     make(base.Header),
@@ -330,17 +186,21 @@ func (r *RTSP) OnRecord(req *base.Request) (*base.Response, error) {
 
 // called after receiving a GET_PARAMETER request.
 func (r *RTSP) OnGetParameter(req *base.Request, s *pb.Message) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	res, err := r.clientToServer(req, s)
-	r.logger.Debugf("[s->c] GET_PARAMETER RESPONSE %+v", res)
+	r.log("[s->c] GET_PARAMETER RESPONSE %+v", res)
 
 	return res, err
 }
 
 // called after receiving a TEARDOWN request.
 func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
+
+	//Delete client from clientMap
+	connectionKey := getRTSPConnectionKey(s.Local, s.Remote)
+	delete(r.clientMap, connectionKey)
 
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
@@ -350,16 +210,11 @@ func (r *RTSP) OnTeardown(req *base.Request, s *pb.Message) (*base.Response, err
 	//update rtsp state
 	rc.state = Teardown
 
-	//Send DELETE_EP to msm-proxy for last client
-	if err := r.SendProxyData(s, make([]uint32, 0)); err != nil {
-		r.logger.Errorf("Could not send proxy data %v", err)
-	}
-
 	//Send TEARDOWN to server if last client
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
 	if r.getClientCount(serverEp) == 0 {
 		res, err := r.clientToServer(req, s)
-		r.logger.Debugf("[s->c] TEARDOWN RESPONSE %+v", res)
+		r.log("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err
 	}
 
@@ -374,7 +229,7 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	// 1. Find the remote endpoint to connect
 	ep, err := r.getEndpointFromPath(req.URL)
 	if err != nil {
-		r.logger.Errorf("could not find endpoint to connect to")
+		r.logError("could not find endpoint to connect to")
 		// res := &base.Response { bad request or something}
 		return nil, err
 	}
@@ -382,42 +237,37 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	// 2. Find remote host for endpoint
 	host, err := r.getHostFromEndpoint(ep)
 	if err != nil {
-		r.logger.Errorf("could not find host")
+		r.logError("could not find host")
 		// res := &base.Response { bad request or something}
 		return nil, err
 	}
 
 	// 3. Find stub connection for given path
-	srv, ok := r.stubConn.Load(host)
+	stubConn, ok := stub.StubMap.Load(host)
 	if !ok {
-		r.logger.Errorf("could not find stub connection for endpoint")
-		return nil, errors.New("not found")
+		r.logError("could not find stub connection for endpoint")
+		return nil, errors.New("stub connection not found")
 	}
 
 	// 4. Check if remote endpoint open RTSP connection
 	if !r.isConnectionOpen(host, s) {
-		r.logger.Debugf("Send REQUEST event open RTSP connection for %v", host)
-		// Send REQUEST event to server pod
-		// _, port, err := net.SplitHostPort(req.URL.Host)
-		// if err != nil {
-		// 	r.logger.Errorf("could not split host port")
-		// 	return nil, err
-		// }
+		r.log("Send REQUEST event open RTSP connection for %v", host)
 		addMsg := &pb.Message{
 			Event:  pb.Event_REQUEST,
 			Remote: ep,
 		}
-		srv.(*StubConnection).conn.Send(addMsg)
+		stubConn.(*stub.StubConnection).Conn.Send(addMsg)
 
 		// Waiting for server pod response with local/remote ports
 		// CP will receive Event_ADD and send value to addCh to unblock channel
-		<-srv.(*StubConnection).addCh
+		<-stubConn.(*stub.StubConnection).AddCh
+		stubConn.(*stub.StubConnection).SendToAddCh = false
 	} else {
-		r.logger.Debugf("Remote endpoint RTSP connection open")
+		r.log("Remote endpoint RTSP connection open")
 	}
 
 	// 5. Update target to client pod
-	messageData := srv.(*StubConnection).data
+	messageData := stubConn.(*stub.StubConnection).Data
 	rc, err := r.getClientRTSPConnection(s)
 	if err != nil {
 		return nil, err
@@ -434,7 +284,14 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 	}
 	s_rc := data.(*RTSPConnection)
 
-	r.logger.Debugf("Server state %v", s_rc.state)
+	//Update client map
+	connectionKey := getRTSPConnectionKey(s.Local, s.Remote)
+	client := r.clientMap[connectionKey]
+	r.clientMap[connectionKey] = Client{
+		getRemoteIPv4Address(s.Remote),
+		client.clientPorts,
+		host,
+	}
 
 	if s_rc.state < Options {
 		// 6. Forward OPTIONS command to server pod
@@ -448,18 +305,17 @@ func (r *RTSP) connectToRemote(req *base.Request, s *pb.Message) (*base.Response
 			Data:   fmt.Sprintf("%s", data),
 		}
 
-		srv.(*StubConnection).conn.Send(optionsMsg)
-		r.logger.Debugf("waiting on options response")
-		res := <-srv.(*StubConnection).dataCh
+		stubConn.(*stub.StubConnection).Conn.Send(optionsMsg)
+		r.log("waiting on options response")
+		res := <-stubConn.(*stub.StubConnection).DataCh
 
 		// Update remote RTSP Connection
-		r.logger.Debugf("Going to update server state")
 		s_rc.state = Options
 		s_rc.response[Options] = res
 		s_rc.responseErr[Options] = err
 
 		// Log
-		r.logger.Debugf("[s->c] OPTIONS RESPONSE %+v", res)
+		r.log("[s->c] OPTIONS RESPONSE %+v", res)
 	}
 
 	return s_rc.response[Options], nil
@@ -473,7 +329,7 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	}
 
 	stubAddr := sc.(*RTSPConnection).targetAddr
-	srv, ok := r.stubConn.Load(stubAddr)
+	stubConn, ok := stub.StubMap.Load(stubAddr)
 	if !ok {
 		return nil, errors.New("can't load stub connection")
 	}
@@ -481,17 +337,14 @@ func (r *RTSP) clientToServer(req *base.Request, s *pb.Message) (*base.Response,
 	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	req.Write(data)
 
-	r.logger.Debugf("Sending data from client to server %v", stubAddr)
-	srv.(*StubConnection).conn.Send(&pb.Message{
+	stubConn.(*stub.StubConnection).Conn.Send(&pb.Message{
 		Event:  pb.Event_DATA,
 		Local:  sc.(*RTSPConnection).targetLocal,
 		Remote: sc.(*RTSPConnection).targetRemote,
 		Data:   fmt.Sprintf("%s", data),
 	})
 
-	r.logger.Debugf("Sent data to server")
-
-	res := <-srv.(*StubConnection).dataCh
+	res := <-stubConn.(*stub.StubConnection).DataCh
 
 	return res, nil
 }
@@ -502,7 +355,7 @@ func (r *RTSP) getHostFromEndpoint(ep string) (string, error) {
 		return "", errors.New("could not parse host:port")
 	}
 
-	r.logger.Debugf("remote IP to connect: %s", host)
+	r.log("remote IP to connect: %s", host)
 
 	return host, nil
 }
@@ -510,7 +363,7 @@ func (r *RTSP) getHostFromEndpoint(ep string) (string, error) {
 func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 	urls := r.urlHandler.GetInternalURLs(p.String())
 
-	r.logger.Debugf("endpoints to connect: %v", urls)
+	r.log("endpoints to connect: %v", urls)
 
 	if len(urls) == 0 {
 		return "", errors.New("Can't get endpoint from path")
@@ -524,7 +377,7 @@ func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 	// if err != nil {
 	// 	return "", errors.New("could not parse host:port")
 	// }
-	r.logger.Debugf("endpoint to connect: %s", ep)
+	r.log("endpoint to connect: %s", ep)
 
 	return ep.Host, nil
 }
@@ -583,28 +436,13 @@ func (r *RTSP) getRemoteRTSPConnection(s *pb.Message) (*RTSPConnection, error) {
 	return s_rc.(*RTSPConnection), nil
 }
 
-func (r *RTSP) getStubAddress(ep string) string {
-	var stubAddress = ""
-	r.stubConn.Range(func(key, srv interface{}) bool {
-		value := srv.(*StubConnection).clients[ep]
-		if value != "" {
-			stubAddress = key.(string)
-		}
-		return true
-	})
-	r.logger.Infof("Found stub address %v with key %v", stubAddress, ep)
-	return stubAddress
-}
-
 func (r *RTSP) getClientCount(serverEp string) int {
 	count := 0
-	data, _ := r.rtspStream.Load(serverEp)
-	if data != nil {
-		for _, v := range data.(RTSPStream).proxyMap {
-			count += len(v.clients)
+	for _, v := range r.clientMap {
+		if v.serverIp == serverEp {
+			count++
 		}
 	}
-
 	return count
 }
 
@@ -675,11 +513,11 @@ func isInterleaved(value base.HeaderValue) bool {
 func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
 	ep, err := r.getEndpointFromPath(url)
 	if err != nil {
-		r.logger.Errorf("could not get endpoint from path")
+		r.logError("could not get endpoint from path")
 		return url
 	}
 	// url.Host = fmt.Sprintf("%s:554", ep)
 	url.Host = ep
-	r.logger.Debugf("Update url to %v", url)
+	r.log("Update url to %v", url)
 	return url
 }

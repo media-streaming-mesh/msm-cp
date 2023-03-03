@@ -2,18 +2,9 @@ package rtsp
 
 import (
 	"github.com/aler9/gortsplib/pkg/base"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/sirupsen/logrus"
 )
-
-type StubConnection struct {
-	conn    pb.MsmControlPlane_SendServer
-	data    pb.Message
-	addCh   chan *pb.Message
-	dataCh  chan *base.Response
-	clients map[string]string
-}
 
 type RTPProxyConnection struct {
 	conn       dp.MsmDataPlaneClient
