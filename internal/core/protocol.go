@@ -73,7 +73,8 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		}
 
 		var streamData *model.StreamData
-		
+		connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
+
 		switch stream.Event {
 		case pb.Event_REGISTER:
 			p.log("Received REGISTER event: %v", stream)
@@ -85,11 +86,11 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 
 		case pb.Event_ADD:
 			p.log("Received ADD event: %v", stream)
-			p.rtmImpl.OnAdd(conn, stream)
+			p.rtmImpl.OnAdd(connectionKey)
 			p.stubHandler.OnAdd(conn, stream)
 		case pb.Event_DELETE:
 			p.log("Received DELETE event: %v", stream)
-			streamData, err = p.rtmImpl.OnDelete(stream)
+			streamData, err = p.rtmImpl.OnDelete(connectionKey)
 			p.stubHandler.OnDelete(conn, stream)
 		case pb.Event_DATA:
 			p.log("Received DATA event: %v", stream)

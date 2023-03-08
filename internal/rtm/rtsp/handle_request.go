@@ -21,10 +21,11 @@ import (
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 )
 
-func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, error) {
+func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
 
 	var res *base.Response
 	var err error
@@ -44,22 +45,22 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 
 	switch req.Method {
 	case base.Options:
-		res, err = r.OnOptions(req, s)
+		res, err = r.OnOptions(req, connectionKey)
 	case base.Announce:
-		res, err = r.OnAnnounce(req, s)
+		res, err = r.OnAnnounce(req, connectionKey)
 	case base.Describe:
-		res, err = r.OnDescribe(req, s)
+		res, err = r.OnDescribe(req, connectionKey)
 	case base.Setup:
-		res, err = r.OnSetup(req, s)
+		res, err = r.OnSetup(req, connectionKey)
 	case base.Play:
 		if sxID != "" {
-			res, err = r.OnPlay(req, s)
+			res, err = r.OnPlay(req, connectionKey)
 		} else {
 			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.Pause:
 		if sxID != "" {
-			res, err = r.OnPause(req, s)
+			res, err = r.OnPause(req, connectionKey)
 		} else {
 			err = liberrors.ErrServerInvalidState{}
 		}
@@ -71,13 +72,13 @@ func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, 
 		}
 	case base.Teardown:
 		if sxID != "" {
-			res, err = r.OnTeardown(req, s)
+			res, err = r.OnTeardown(req, connectionKey)
 		} else {
 			err = liberrors.ErrServerInvalidState{}
 		}
 	case base.GetParameter:
 		if sxID != "" {
-			res, err = r.OnGetParameter(req, s)
+			res, err = r.OnGetParameter(req, connectionKey)
 		} else {
 			err = liberrors.ErrServerInvalidState{}
 		}

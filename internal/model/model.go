@@ -1,5 +1,23 @@
 package model
 
+import "fmt"
+
+//============================================= Connection Key =======================================
+
+type ConnectionKey struct {
+	Local  string
+	Remote string
+	Key    string
+}
+
+func NewConnectionKey(local string, remote string) ConnectionKey {
+	return ConnectionKey{
+		local,
+		remote,
+		fmt.Sprintf("%s%s", local, remote),
+	}
+}
+
 //============================================= Stream =============================================
 
 type Stream struct {
