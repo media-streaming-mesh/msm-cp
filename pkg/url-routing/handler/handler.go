@@ -96,12 +96,9 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 			return endpoints
 		}
 
-		// see if IP is a node IP
-		if uh.isNodeIP(addresses[0]) {
-			uh.log("IP matches node IP")
-			if len(path) > 0 {
-				serviceName = path[1:]
-			}
+		// now look for the URL suffix and match to a K8s service name
+		if len(path) > 0 {
+			serviceName = path[1:]
 		}
 	}
 
@@ -126,7 +123,7 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 
 // get all endpoints for a named service
 func (uh *UrlHandler) getEndpoints(serviceName string) []string {
-	ends, err := uh.clientset.CoreV1().Endpoints("default").Get(context.TODO(), serviceName, v1.GetOptions{})
+	ends, err := uh.clientset.CoreV1().Endpoints("gbear").Get(context.TODO(), serviceName, v1.GetOptions{})
 	if err != nil {
 		uh.log("failed to get service endpoints")
 		return []string{}
@@ -147,27 +144,6 @@ func (uh *UrlHandler) getEndpoints(serviceName string) []string {
 	}
 
 	return endpoints
-}
-
-// check if IP is a node IP
-func (uh *UrlHandler) isNodeIP(hostname string) bool {
-	// get node IPs
-	nodes, err := uh.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		uh.log("failed to get node list")
-		return false
-	}
-
-	for _, node := range nodes.Items {
-		for _, address := range node.Status.Addresses {
-			if address.Address == hostname {
-				uh.log("matched node address")
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 // look for a service with clusterIP matching a given IP
