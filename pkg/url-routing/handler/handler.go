@@ -15,7 +15,8 @@ import (
 )
 
 type UrlHandler struct {
-	clientset kubernetes.Interface
+	clientset        kubernetes.Interface
+	currentNamespace string
 }
 
 func (uh *UrlHandler) InitializeUrlHandler() {
@@ -30,6 +31,7 @@ func (uh *UrlHandler) InitializeUrlHandler() {
 	}
 
 	uh.clientset = clientset
+	uh.currentNamespace = "default"
 	uh.varifyK8sApi()
 
 	uh.log("connected to url-routing-server")
@@ -40,6 +42,15 @@ func (uh *UrlHandler) varifyK8sApi() {
 	if err != nil {
 		log.Fatalf("could not connect to url-routing-server: %v", err)
 	}
+
+	namespaces, err := uh.clientset.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
+	if err != nil {
+		uh.log("failed to get namespaces %v", err)
+	}
+	if len(namespaces.Items) < 0 {
+		uh.log("got empty namespaces")
+	}
+	uh.log("Namespace %v", namespaces.Items[0].Name)
 }
 
 func (uh *UrlHandler) log(format string, args ...interface{}) {
@@ -123,7 +134,7 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 
 // get all endpoints for a named service
 func (uh *UrlHandler) getEndpoints(serviceName string) []string {
-	ends, err := uh.clientset.CoreV1().Endpoints("gbear").Get(context.TODO(), serviceName, v1.GetOptions{})
+	ends, err := uh.clientset.CoreV1().Endpoints(uh.currentNamespace).Get(context.TODO(), serviceName, v1.GetOptions{})
 	if err != nil {
 		uh.log("failed to get service endpoints")
 		return []string{}
@@ -148,7 +159,7 @@ func (uh *UrlHandler) getEndpoints(serviceName string) []string {
 
 // look for a service with clusterIP matching a given IP
 func (uh *UrlHandler) getServiceName(clusterIP string) (string, error) {
-	services, err := uh.clientset.CoreV1().Services("default").List(context.TODO(),
+	services, err := uh.clientset.CoreV1().Services(uh.currentNamespace).List(context.TODO(),
 		v1.ListOptions{})
 
 	if err != nil {
