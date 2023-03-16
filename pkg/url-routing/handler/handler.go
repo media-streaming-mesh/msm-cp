@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/url"
@@ -31,26 +32,25 @@ func (uh *UrlHandler) InitializeUrlHandler() {
 	}
 
 	uh.clientset = clientset
-	uh.currentNamespace = "default"
-	uh.varifyK8sApi()
+	uh.verifyK8sApi()
 
 	uh.log("connected to url-routing-server")
+
+	// Get the current namespace of the pod
+	currentNamespace, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		log.Fatalf("unable to read current namespace")
+	}
+
+	uh.log("current namespace is %v", string(currentNamespace))
+	uh.currentNamespace = string(currentNamespace)
 }
 
-func (uh *UrlHandler) varifyK8sApi() {
+func (uh *UrlHandler) verifyK8sApi() {
 	_, err := uh.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("could not connect to url-routing-server: %v", err)
 	}
-
-	namespaces, err := uh.clientset.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		uh.log("failed to get namespaces %v", err)
-	}
-	if len(namespaces.Items) < 0 {
-		uh.log("got empty namespaces")
-	}
-	uh.log("Namespace %v", namespaces.Items[0].Name)
 }
 
 func (uh *UrlHandler) log(format string, args ...interface{}) {
