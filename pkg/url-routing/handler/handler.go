@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/url"
@@ -15,7 +16,8 @@ import (
 )
 
 type UrlHandler struct {
-	clientset kubernetes.Interface
+	clientset        kubernetes.Interface
+	currentNamespace string
 }
 
 func (uh *UrlHandler) InitializeUrlHandler() {
@@ -30,12 +32,21 @@ func (uh *UrlHandler) InitializeUrlHandler() {
 	}
 
 	uh.clientset = clientset
-	uh.varifyK8sApi()
+	uh.verifyK8sApi()
 
 	uh.log("connected to url-routing-server")
+
+	// Get the current namespace of the pod
+	currentNamespace, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		log.Fatalf("unable to read current namespace")
+	}
+
+	uh.log("current namespace is %v", string(currentNamespace))
+	uh.currentNamespace = string(currentNamespace)
 }
 
-func (uh *UrlHandler) varifyK8sApi() {
+func (uh *UrlHandler) verifyK8sApi() {
 	_, err := uh.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		log.Fatalf("could not connect to url-routing-server: %v", err)
@@ -96,12 +107,9 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 			return endpoints
 		}
 
-		// see if IP is a node IP
-		if uh.isNodeIP(addresses[0]) {
-			uh.log("IP matches node IP")
-			if len(path) > 0 {
-				serviceName = path[1:]
-			}
+		// now look for the URL suffix and match to a K8s service name
+		if len(path) > 0 {
+			serviceName = path[1:]
 		}
 	}
 
@@ -126,7 +134,7 @@ func (uh *UrlHandler) resolveEndpoints(hostname string, port string, path string
 
 // get all endpoints for a named service
 func (uh *UrlHandler) getEndpoints(serviceName string) []string {
-	ends, err := uh.clientset.CoreV1().Endpoints("default").Get(context.TODO(), serviceName, v1.GetOptions{})
+	ends, err := uh.clientset.CoreV1().Endpoints(uh.currentNamespace).Get(context.TODO(), serviceName, v1.GetOptions{})
 	if err != nil {
 		uh.log("failed to get service endpoints")
 		return []string{}
@@ -149,30 +157,9 @@ func (uh *UrlHandler) getEndpoints(serviceName string) []string {
 	return endpoints
 }
 
-// check if IP is a node IP
-func (uh *UrlHandler) isNodeIP(hostname string) bool {
-	// get node IPs
-	nodes, err := uh.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		uh.log("failed to get node list")
-		return false
-	}
-
-	for _, node := range nodes.Items {
-		for _, address := range node.Status.Addresses {
-			if address.Address == hostname {
-				uh.log("matched node address")
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // look for a service with clusterIP matching a given IP
 func (uh *UrlHandler) getServiceName(clusterIP string) (string, error) {
-	services, err := uh.clientset.CoreV1().Services("default").List(context.TODO(),
+	services, err := uh.clientset.CoreV1().Services(uh.currentNamespace).List(context.TODO(),
 		v1.ListOptions{})
 
 	if err != nil {
