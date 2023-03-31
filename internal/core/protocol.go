@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"io"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -73,16 +74,25 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		}
 
 		var streamData *model.StreamData
-		
+
 		switch stream.Event {
 		case pb.Event_REGISTER:
 			p.log("Received REGISTER event: %v", stream)
 			//TODO: Find a cleaner way to map node ip for stub
-			contextPeer, _ := peer.FromContext(ctx)
-			remoteAddr, _, _ := net.SplitHostPort(contextPeer.Addr.String())
-			proxyIp, _ := node_mapper.MapNode(remoteAddr)
+			var key string
+			if stream != nil {
+				nodeInfos := strings.Split(stream.Data, ":")
+				p.log("node infos %v count %v", nodeInfos, len(nodeInfos))
+				if len(nodeInfos) > 0 {
+					key = nodeInfos[0]
+				}
+			}
+			if key == "" {
+				contextPeer, _ := peer.FromContext(ctx)
+				key, _, _ = net.SplitHostPort(contextPeer.Addr.String())
+			}
+			proxyIp, _ := node_mapper.MapNode(key)
 			p.stubHandler.OnRegistration(conn, proxyIp)
-
 		case pb.Event_ADD:
 			p.log("Received ADD event: %v", stream)
 			p.rtmImpl.OnAdd(conn, stream)
