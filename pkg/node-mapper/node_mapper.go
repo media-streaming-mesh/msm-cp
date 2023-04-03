@@ -133,9 +133,11 @@ func (mapper *NodeMapper) addNode(node *v12.Node) {
 	//Save ip to hashmap
 	for _, address := range node.Status.Addresses {
 		if address.Type == v12.NodeInternalIP {
+			NodeMap.Store(node.Name, address.Address)
+
+			//TODO remove these when use stubIp
 			NodeMap.Store(key, address.Address)
 			NodeMap.Store(address.Address+"/32", address.Address) // store nodes's own IP in the map
-			NodeMap.Store(node.Name, address.Address)
 
 			mapper.log("Store node Internal IP %v with key %v", address.Address, key)
 			mapper.log("Store node Internal IP %v with key %v", address.Address, address.Address+"/32")
