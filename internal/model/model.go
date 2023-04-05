@@ -1,6 +1,45 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/aler9/gortsplib/pkg/base"
+)
+
+// ============================================= Stub =======================================
+type StubChannel struct {
+	Key              ConnectionKey
+	Request          chan StubChannelRequest
+	Response         chan StubChannelResponse
+	ReceivedResponse bool
+}
+
+func NewStubChannel() StubChannel {
+	return StubChannel{
+		NewConnectionKey("", ""),
+		make(chan StubChannelRequest, 1),
+		make(chan StubChannelResponse, 1),
+		false,
+	}
+}
+
+type StubChannelRequestType string
+
+const (
+	Config StubChannelRequestType = "CONFIG"
+	Add    StubChannelRequestType = "ADD"
+	Data   StubChannelRequestType = "DATA"
+)
+
+type StubChannelRequest struct {
+	Type    StubChannelRequestType
+	Local   string
+	Remote  string
+	Request *base.Request
+}
+type StubChannelResponse struct {
+	Error    error
+	Response *base.Response
+}
 
 //============================================= Connection Key =======================================
 

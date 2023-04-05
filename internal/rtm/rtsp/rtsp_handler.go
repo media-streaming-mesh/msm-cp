@@ -17,22 +17,19 @@
 package rtsp
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/aler9/gortsplib/pkg/base"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 )
 
 // called after receiving an OPTIONS request.
 func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	// call k8sAPIHelper to connect to server pod
 	host, err := r.connectToRemote(req)
@@ -41,22 +38,21 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 		return nil, err
 	}
 
-	stubConn, ok := stub.StubMap.Load(host)
+	stubChannel, ok := r.stubChannels[host]
 	if !ok {
-		r.logError("could not find stub connection for endpoint")
-		return nil, errors.New("stub connection not found")
+		return nil, errors.New("can't load stub channel")
 	}
+	serverConnectionKey := stubChannel.Key
 
 	// Update target to client pod
-	messageData := stubConn.(*stub.StubConnection).Data
 	rc, err := r.getClientRTSPConnection(connectionKey)
 	if err != nil {
 		return nil, err
 	}
 	rc.state = Options
 	rc.targetAddr = host
-	rc.targetLocal = messageData.Local
-	rc.targetRemote = messageData.Remote
+	rc.targetLocal = serverConnectionKey.Local
+	rc.targetRemote = serverConnectionKey.Remote
 
 	s_rc, err := r.getRemoteRTSPConnection(connectionKey)
 	if err != nil {
@@ -73,23 +69,18 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 
 	if s_rc.state < Options {
 		// Forward OPTIONS command to server pod
-		data := bytes.NewBuffer(make([]byte, 0, 4096))
-		req.Write(data)
-
-		optionsMsg := &pb.Message{
-			Event:  pb.Event_DATA,
-			Local:  messageData.Local,
-			Remote: messageData.Remote,
-			Data:   fmt.Sprintf("%s", data),
+		stubChannel.Request <- model.StubChannelRequest{
+			model.Data,
+			serverConnectionKey.Local,
+			serverConnectionKey.Remote,
+			req,
 		}
-
-		stubConn.(*stub.StubConnection).Conn.Send(optionsMsg)
 		r.log("waiting on options response")
-		res := <-stubConn.(*stub.StubConnection).DataCh
+		res := <-stubChannel.Response
 
 		// Update remote RTSP Connection
 		s_rc.state = Options
-		s_rc.response[Options] = res
+		s_rc.response[Options] = res.Response
 		s_rc.responseErr[Options] = err
 
 		// Log option response
@@ -97,12 +88,11 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 	}
 
 	return s_rc.response[Options], nil
-
 }
 
 // called after receiving a DESCRIBE request.
 func (r *RTSP) OnDescribe(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	rc, _ := r.getClientRTSPConnection(connectionKey)
 	rc.state = Describe
@@ -133,7 +123,7 @@ func (r *RTSP) OnDescribe(req *base.Request, connectionKey model.ConnectionKey) 
 
 // called after receiving an ANNOUNCE request.
 func (r *RTSP) OnAnnounce(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 	res, err := r.clientToServer(req, connectionKey)
 	r.log("[s->c] ANNOUNCE RESPONSE %+v", res)
 
@@ -142,7 +132,7 @@ func (r *RTSP) OnAnnounce(req *base.Request, connectionKey model.ConnectionKey) 
 
 // called after receiving a SETUP request.
 func (r *RTSP) OnSetup(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	rc, _ := r.getClientRTSPConnection(connectionKey)
 	rc.state = Setup
@@ -197,7 +187,7 @@ func (r *RTSP) OnSetup(req *base.Request, connectionKey model.ConnectionKey) (*b
 
 // called after receiving a PLAY request.
 func (r *RTSP) OnPlay(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
-	r.logger.Debugf("[c->s] %+v", req)
+	r.log("[c->s] %+v", req)
 
 	rc, _ := r.getClientRTSPConnection(connectionKey)
 	rc.state = Play
@@ -284,7 +274,6 @@ func (r *RTSP) connectToRemote(req *base.Request) (string, error) {
 	ep, err := r.getEndpointFromPath(req.URL)
 	if err != nil {
 		r.logError("could not find endpoint to connect to")
-		// res := &base.Response { bad request or something}
 		return "", err
 	}
 
@@ -292,30 +281,28 @@ func (r *RTSP) connectToRemote(req *base.Request) (string, error) {
 	host, err := r.getHostFromEndpoint(ep)
 	if err != nil {
 		r.logError("could not find host")
-		// res := &base.Response { bad request or something}
 		return "", err
-	}
-
-	// Find stub connection for given path
-	stubConn, ok := stub.StubMap.Load(host)
-	if !ok {
-		r.logError("could not find stub connection for endpoint")
-		return "", errors.New("stub connection not found")
 	}
 
 	// 4. Check if remote endpoint open RTSP connection
 	if !r.isConnectionOpen(host) {
-		r.log("Send REQUEST event open RTSP connection for %v", host)
-		addMsg := &pb.Message{
-			Event:  pb.Event_REQUEST,
-			Remote: ep,
-		}
-		stubConn.(*stub.StubConnection).Conn.Send(addMsg)
+		stubChannel, ok := r.stubChannels[host]
+		if ok {
+			r.log("Send REQUEST event open RTSP connection for %v", host)
+			stubChannel.Request <- model.StubChannelRequest{
+				model.Add,
+				"",
+				ep,
+				nil,
+			}
 
-		// Waiting for server pod response with local/remote ports
-		// CP will receive Event_ADD and send value to addCh to unblock channel
-		<-stubConn.(*stub.StubConnection).AddCh
-		stubConn.(*stub.StubConnection).SendToAddCh = false
+			// Waiting for server pod response with local/remote ports
+			// CP will receive Event_ADD and send value to addCh to unblock channel
+			<-stubChannel.Response
+			r.log("Successful connect to remote")
+		} else {
+			return "", errors.New("Can't load stub channel")
+		}
 	} else {
 		r.log("Remote endpoint RTSP connection open")
 	}
@@ -329,24 +316,22 @@ func (r *RTSP) clientToServer(req *base.Request, connectionKey model.ConnectionK
 	}
 
 	stubAddr := sc.(*RTSPConnection).targetAddr
-	stubConn, ok := stub.StubMap.Load(stubAddr)
+	stubChannel, ok := r.stubChannels[stubAddr]
+
 	if !ok {
-		return nil, errors.New("can't load stub connection")
+		return nil, errors.New("can't load stub channel")
 	}
 
-	data := bytes.NewBuffer(make([]byte, 0, 4096))
-	req.Write(data)
+	//Send request and waiting for response
+	stubChannel.Request <- model.StubChannelRequest{
+		model.Data,
+		sc.(*RTSPConnection).targetLocal,
+		sc.(*RTSPConnection).targetRemote,
+		req,
+	}
+	res := <-stubChannel.Response
 
-	stubConn.(*stub.StubConnection).Conn.Send(&pb.Message{
-		Event:  pb.Event_DATA,
-		Local:  sc.(*RTSPConnection).targetLocal,
-		Remote: sc.(*RTSPConnection).targetRemote,
-		Data:   fmt.Sprintf("%s", data),
-	})
-
-	res := <-stubConn.(*stub.StubConnection).DataCh
-
-	return res, nil
+	return res.Response, nil
 }
 
 func (r *RTSP) getHostFromEndpoint(ep string) (string, error) {
@@ -391,13 +376,10 @@ func getRemoteIPv4Address(url string) string {
 }
 
 func (r *RTSP) isConnectionOpen(ep string) bool {
-	r.logger.Debugf("Check RTSP connection for endpoint %s", ep)
+	r.log("Check RTSP connection for endpoint %s", ep)
 	check := false
 
 	r.rtspConn.Range(func(key, value interface{}) bool {
-		r.logger.Debugf("RTSP connection targetAddress %s", value.(*RTSPConnection).targetAddr)
-		r.logger.Debugf("RTSP connection localAddress %s", value.(*RTSPConnection).targetLocal)
-		r.logger.Debugf("RTSP connection remoteAddress %s", value.(*RTSPConnection).targetRemote)
 		if value.(*RTSPConnection).targetAddr == ep {
 			check = true
 		}

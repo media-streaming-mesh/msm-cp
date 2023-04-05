@@ -20,9 +20,7 @@ import (
 	"errors"
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
@@ -98,14 +96,20 @@ func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKe
 	}
 }
 
-func (r *RTSP) handleResponse(res *base.Response, s *pb.Message) error {
-	key := getRemoteIPv4Address(s.Remote)
-	stubConn, ok := stub.StubMap.Load(key)
+func (r *RTSP) handleResponse(res *base.Response, connectionKey model.ConnectionKey) error {
+	key := getRemoteIPv4Address(connectionKey.Remote)
+	stubChannel, ok := r.stubChannels[key]
+
 	if !ok {
-		return errors.New("Can't find stub connection")
+		return errors.New("Can't load stub channel")
 	}
 
-	stubConn.(*stub.StubConnection).DataCh <- res
+	stubChannel.Response <- model.StubChannelResponse{
+		nil,
+		res,
+	}
+	stubChannel.ReceivedResponse = true
+	r.log("received response %v", res)
 	return nil
 }
 

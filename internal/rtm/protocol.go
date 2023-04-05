@@ -27,7 +27,7 @@ import (
 
 // API provides external access to
 type API interface {
-	OnAdd(connectionKey model.ConnectionKey)
+	OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel)
 	OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, error)
 	OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error)
 }
@@ -53,11 +53,11 @@ func New(cfg *config.Cfg) *Protocol {
 	}
 }
 
-func (p *Protocol) OnAdd(connectionKey model.ConnectionKey) {
+func (p *Protocol) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
 	proto := p.cfg.Protocol
 	switch proto {
 	case "rtsp":
-		p.rtsp.OnAdd(connectionKey)
+		p.rtsp.OnAdd(connectionKey, stubChannels)
 	default:
 	}
 }

@@ -33,11 +33,12 @@ import (
 )
 
 type RTSP struct {
-	urlHandler *msm_url.UrlHandler
-	logger     *logrus.Logger
-	methods    []base.Method
-	rtspConn   *sync.Map
-	clientMap  map[string]Client
+	urlHandler   *msm_url.UrlHandler
+	logger       *logrus.Logger
+	methods      []base.Method
+	rtspConn     *sync.Map
+	stubChannels map[string]*model.StubChannel
+	clientMap    map[string]Client
 }
 
 type Client struct {
@@ -91,11 +92,12 @@ func NewRTSP(opts ...Option) *RTSP {
 	uHandler.InitializeUrlHandler()
 
 	return &RTSP{
-		urlHandler: uHandler,
-		logger:     cfg.Logger,
-		methods:    cfg.SupportedMethods,
-		rtspConn:   new(sync.Map),
-		clientMap:  make(map[string]Client),
+		urlHandler:   uHandler,
+		logger:       cfg.Logger,
+		methods:      cfg.SupportedMethods,
+		rtspConn:     new(sync.Map),
+		stubChannels: make(map[string]*model.StubChannel),
+		clientMap:    make(map[string]Client),
 	}
 
 }
@@ -111,7 +113,10 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 }
 
 // called when a connection is opened.
-func (r *RTSP) OnAdd(connectionKey model.ConnectionKey) {
+func (r *RTSP) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
+	//Store channel
+	r.stubChannels = stubChannels
+
 	// create a new RTSP connection and store it
 	rc := newRTSPConnection(r.logger)
 	rc.author = connectionKey.Remote
@@ -197,7 +202,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 
 	} else if errRes == nil {
 		// received a server-side response
-		err := r.handleResponse(res, stream)
+		err := r.handleResponse(res, connectionKey)
 		if err != nil {
 			return nil, fmt.Errorf("handle response error=%s", err)
 		}

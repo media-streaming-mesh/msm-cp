@@ -86,12 +86,12 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 
 		case pb.Event_ADD:
 			p.log("Received ADD event: %v", stream)
-			p.rtmImpl.OnAdd(connectionKey)
+			p.rtmImpl.OnAdd(connectionKey, p.stubHandler.StubChannels)
 			p.stubHandler.OnAdd(conn, stream)
 		case pb.Event_DELETE:
 			p.log("Received DELETE event: %v", stream)
 			streamData, err = p.rtmImpl.OnDelete(connectionKey)
-			p.stubHandler.OnDelete(conn, stream)
+			p.stubHandler.OnDelete(connectionKey, conn)
 		case pb.Event_DATA:
 			p.log("Received DATA event: %v", stream)
 			streamData, err = p.rtmImpl.OnData(conn, stream)
