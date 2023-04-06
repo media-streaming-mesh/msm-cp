@@ -1,6 +1,7 @@
 package transport
 
 import (
+	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -22,6 +23,7 @@ func TestCreateStream(t *testing.T) {
 		grpcClient,
 	}
 
-	stream, result := dpGrpcClient.CreateStream("192.168.82.20", 8050)
+	t.Log("FIXME")
+	stream, result := dpGrpcClient.CreateStream(1, pb_dp.Encap_RTP_UDP, "192.168.82.20", 8050)
 	logger.Debugf("Create stream-mapper %v %v", stream, result)
 }
