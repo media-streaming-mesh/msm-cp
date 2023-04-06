@@ -18,14 +18,15 @@ package rtsp
 
 import (
 	"errors"
+
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, s *pb.Message) (*base.Response, error) {
-
 	var res *base.Response
 	var err error
 	var ok bool

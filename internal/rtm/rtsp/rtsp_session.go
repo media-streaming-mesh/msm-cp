@@ -2,9 +2,10 @@ package rtsp
 
 import (
 	"encoding/binary"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"strconv"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ServerSession is a server-side RTSP session.
@@ -37,7 +38,6 @@ func newSessionID(sessions map[string]*RTSPSession) (string, error) {
 func newRTSPSession(
 	id string,
 ) *RTSPSession {
-
 	rs := &RTSPSession{
 		id: id,
 	}

@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 )
 
 type grpcServer struct {
@@ -39,7 +40,6 @@ type grpcClient struct {
 
 // newGrpcServer initializes a new gRPC server
 func newGrpcServer(opts *options) (*grpcServer, error) {
-
 	var optsArr []grpc.ServerOption
 	optsArr = append(optsArr,
 		grpc.ChainUnaryInterceptor(),
@@ -106,7 +106,7 @@ func (s *grpcClient) start() {
 	s.client = pb_dp.NewMsmDataPlaneClient(s.conn)
 }
 
-//stop grpc client
+// stop grpc client
 func (s *grpcClient) close() {
 	s.conn.Close()
 }

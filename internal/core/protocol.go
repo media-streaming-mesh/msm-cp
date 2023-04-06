@@ -2,6 +2,14 @@ package core
 
 import (
 	"fmt"
+	"io"
+	"net"
+	"strings"
+	"sync"
+
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/peer"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
@@ -9,12 +17,6 @@ import (
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	stream_mapper "github.com/media-streaming-mesh/msm-cp/pkg/stream-mapper"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
-	"io"
-	"net"
-	"strings"
-	"sync"
 )
 
 type API interface {
@@ -27,12 +29,11 @@ type Protocol struct {
 	stubHandler *stub.StubHandler
 	rtmImpl     rtm.API
 
-	//TODO: move stream_mapper to msm-nc
+	// TODO: move stream_mapper to msm-nc
 	streamMapper *stream_mapper.StreamMapper
 }
 
 func New(cfg *config.Cfg) *Protocol {
-
 	return &Protocol{
 		cfg:          cfg,
 		logger:       cfg.Logger,
@@ -51,7 +52,7 @@ func (p *Protocol) logError(format string, args ...interface{}) {
 }
 
 func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
-	var ctx = conn.Context()
+	ctx := conn.Context()
 	for {
 		// exit if context is done or continue
 		select {
@@ -61,7 +62,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 
-		//Process stream data
+		// Process stream data
 		stream, err := conn.Recv()
 		if err == io.EOF {
 			// return will close stream-mapper from server side
@@ -78,7 +79,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		switch stream.Event {
 		case pb.Event_REGISTER:
 			p.log("Received REGISTER event: %v", stream)
-			//TODO: Find a cleaner way to map node ip for stub
+			// TODO: Find a cleaner way to map node ip for stub
 			var proxyIp string
 			if stream != nil {
 				nodeInfos := strings.Split(stream.Data, ":")
@@ -110,9 +111,9 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			return err
 		}
 
-		//Send data to proxy
+		// Send data to proxy
 		if streamData != nil {
-			//TODO: Writes logical stream graphs to etcd cluster
+			// TODO: Writes logical stream graphs to etcd cluster
 			stubAddress := stub.GetStubAddress(streamData.ClientIp, stream.Remote)
 			p.log("StubAddress %v", stubAddress)
 

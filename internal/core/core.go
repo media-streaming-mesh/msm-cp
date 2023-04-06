@@ -19,11 +19,12 @@ package core
 import (
 	"context"
 	"fmt"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
@@ -69,13 +70,13 @@ func (a *App) Start() error {
 		transport.UseGrpcImpl(a.grpcImpl),
 	}
 
-	var startTransportErr = make(chan error)
+	startTransportErr := make(chan error)
 
 	go func() {
 		startTransportErr <- transport.Run(transportOptions...)
 	}()
 
-	//block until we exit
+	// block until we exit
 	select {
 	case err := <-startTransportErr:
 		if ctx.Err() != nil {
