@@ -1,22 +1,22 @@
 package transport
 
 import (
-	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	"testing"
+
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"testing"
+
+	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
+	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 )
 
 func TestCreateStream(t *testing.T) {
-
 	logger := logrus.New()
 
 	grpcClient, err := transport.SetupClient("172.18.0.2")
 	require.NoError(t, err)
 	if err != nil {
 		logger.Debugf("Failed to connect to server, error %s\n", err)
-
 	}
 	dpGrpcClient := transport.Client{
 		logger,

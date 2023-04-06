@@ -21,17 +21,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
-	"google.golang.org/grpc/peer"
 	"net"
 	"strings"
 	"sync"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/peer"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 )
 
@@ -100,7 +100,6 @@ func NewRTSP(opts ...Option) *RTSP {
 		rtspConn:   new(sync.Map),
 		clientMap:  make(map[string]Client),
 	}
-
 }
 
 func (r *RTSP) log(format string, args ...interface{}) {
@@ -115,7 +114,7 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 
 // called when a connection is opened.
 func (r *RTSP) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
-	//Get stub connection
+	// Get stub connection
 	ctx := conn.Context()
 	p, _ := peer.FromContext(ctx)
 	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
@@ -144,7 +143,7 @@ func (r *RTSP) OnDelete(stream *pb.Message) (*model.StreamData, error) {
 	key := getRTSPConnectionKey(stream.Local, stream.Remote)
 	r.rtspConn.Delete(key)
 
-	//Delete client from client map
+	// Delete client from client map
 	connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
 	delete(r.clientMap, connectionKey)
 	r.log("RTSP connection closed from client %s", stream.Remote)
@@ -153,9 +152,9 @@ func (r *RTSP) OnDelete(stream *pb.Message) (*model.StreamData, error) {
 }
 
 func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
-	//Read stream data
+	// Read stream data
 	var streamData *model.StreamData
-	var data = bytes.NewBuffer(make([]byte, 0, 4096))
+	data := bytes.NewBuffer(make([]byte, 0, 4096))
 	reqReader := bufio.NewReader(strings.NewReader(stream.Data))
 	resReader := bufio.NewReader(strings.NewReader(stream.Data))
 
@@ -168,7 +167,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 	if errReq != nil && errRes != nil {
 		return nil, fmt.Errorf("request error=%s response error=%s", errRes, errRes)
 	} else if errReq == nil {
-		//Get client ports
+		// Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
 		if len(clientPorts) != 0 {
 			connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
@@ -198,20 +197,19 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 
 		r.log("response to client is %v", pbRes)
 
-		//Send response back to client
+		// Send response back to client
 		err = conn.Send(pbRes)
 		if err != nil {
 			return nil, fmt.Errorf("send response error=%s", err)
 		}
 
-		//Get stream data
+		// Get stream data
 		if req.Method == base.Setup {
 			streamData = r.getStreamData(stream, model.Create)
 		}
 		if req.Method == base.Play {
 			streamData = r.getStreamData(stream, model.Play)
 		}
-
 	} else if errRes == nil {
 		// received a server-side response
 		err := r.handleResponse(res, stream)

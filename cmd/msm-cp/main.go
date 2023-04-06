@@ -21,11 +21,9 @@ import (
 )
 
 func main() {
-
 	app, err := core.InitApp()
 	must(err)
 	must(app.Start())
-
 }
 
 func must(err error) {

@@ -30,7 +30,6 @@ func (s *server) Send(srv pb.MsmControlPlane_SendServer) error {
 	s.testCache["test"] = ip
 
 	for {
-
 		// exit if context is done
 		// or continue
 		select {
@@ -63,7 +62,6 @@ func (s *server) Send(srv pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 	}
-
 }
 
 func main() {
@@ -106,5 +104,4 @@ func main() {
 		fmt.Println("shiat")
 	}
 	time.Sleep(time.Second * 10)
-
 }

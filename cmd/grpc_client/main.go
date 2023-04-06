@@ -19,11 +19,13 @@ package main
 import (
 	"context"
 	"fmt"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"google.golang.org/grpc"
 	"io"
 	"log"
 	"os"
+
+	"google.golang.org/grpc"
+
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 )
 
 func main() {
@@ -78,5 +80,4 @@ func main() {
 
 	<-done
 	log.Printf("finished client side")
-
 }

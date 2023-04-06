@@ -3,12 +3,14 @@ package stream_mapper
 import (
 	"errors"
 	"fmt"
+	"sync"
+
+	"github.com/sirupsen/logrus"
+
 	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 var streamId StreamId
@@ -51,11 +53,11 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		return errors.New("[Stream Mapper] empty server/client port")
 	}
 
-	//Check if client/server on same node
+	// Check if client/server on same node
 	isOnSameNode := node_mapper.IsOnSameNode(data.StubIp, data.ServerIp)
 	m.log("server %v and client %v - same node is %v", data.ServerIp, data.StubIp, isOnSameNode)
 
-	//Get proxy ip
+	// Get proxy ip
 	clientProxyIP, err := node_mapper.MapNode(data.StubIp)
 	if err != nil {
 		return err
@@ -69,7 +71,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		m.log("server msm-proxy ip %v", serverProxyIP)
 	}
 
-	//Create GRPC connection
+	// Create GRPC connection
 	clientGrpcClient, err := transport.SetupClient(clientProxyIP)
 	if err != nil {
 		m.logError("Failed to setup GRPC client, error %s\n", err)
@@ -90,17 +92,17 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		}
 	}
 
-	//Send data to proxy
+	// Send data to proxy
 	if data.StreamState == model.Create {
 		var stream model.Stream
 		savedStream, _ := m.streamMap.Load(data.ServerIp)
 
-		//Send Create Stream to proxy
+		// Send Create Stream to proxy
 		if savedStream == nil {
 			streamId := GetStreamID()
 			m.log("stream Id %v", streamId)
 
-			//Create new stream
+			// Create new stream
 			stream = model.Stream{
 				StreamId: streamId,
 				ProxyMap: make(map[string]model.Proxy),
@@ -134,7 +136,6 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 
 			// now store the RTSP stream-mapper
 			m.streamMap.Store(data.ServerIp, stream)
-
 		} else {
 			stream = savedStream.(model.Stream)
 			if _, exists := stream.ProxyMap[clientProxyIP]; !exists {
@@ -150,7 +151,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 			}
 		}
 
-		//Send Create Endpoint to proxy
+		// Send Create Endpoint to proxy
 		clientProxy := stream.ProxyMap[clientProxyIP]
 		m.log("Client proxy %v total clients %v", clientProxy, len(clientProxy.Clients))
 
@@ -162,7 +163,7 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 		endpoint, result := clientDpGrpcClient.CreateEndpoint(stream.StreamId, pb_dp.Encap_RTP_UDP, data.ClientIp, data.ClientPorts[0])
 		m.log("GRPC create client ep %v result %v", endpoint, result)
 
-		//Update streamMap data
+		// Update streamMap data
 		clientProxy.Clients = append(clientProxy.Clients, model.Client{
 			ClientIp: data.ClientIp,
 			Port:     data.ClientPorts[0],
@@ -234,14 +235,14 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 			Clients:     clientProxy.Clients,
 		}
 
-		//End proxy-proxy connection
+		// End proxy-proxy connection
 		if !isOnSameNode && clientProxy.StreamState < model.Teardown && len(clientProxy.Clients) == 0 {
 			endpoint2, result := serverDpGrpcClient.DeleteEndpoint(stream.StreamId, clientProxyIP, 8050)
 			delete(stream.ProxyMap, clientProxyIP)
 			m.log("GRPC delete ep %v %v", endpoint2, result)
 		}
 
-		//Delete stream if all clients terminate
+		// Delete stream if all clients terminate
 		if m.getClientCount(data.ServerIp) == 0 {
 			if isOnSameNode {
 				streamData, result := clientDpGrpcClient.DeleteStream(stream.StreamId, data.ServerIp, 8050)
@@ -255,7 +256,6 @@ func (m *StreamMapper) ProcessStream(data model.StreamData) error {
 				streamData2, result := clientDpGrpcClient.DeleteStream(stream.StreamId, serverProxyIP, 8050)
 				m.log("GRPC delete stream %v %v", streamData2, result)
 			}
-
 		}
 	}
 

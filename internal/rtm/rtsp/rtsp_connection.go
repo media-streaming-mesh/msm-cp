@@ -2,8 +2,9 @@ package rtsp
 
 import (
 	"github.com/aler9/gortsplib/pkg/base"
-	dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 	"github.com/sirupsen/logrus"
+
+	dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 )
 
 type RTPProxyConnection struct {
