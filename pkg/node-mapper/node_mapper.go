@@ -25,7 +25,7 @@ type NodeMapper struct {
 	logger    *logrus.Logger
 }
 
-func (mapper *NodeMapper) InitializeNodeMapper(cfg *config.Cfg) {
+func InitializeNodeMapper(cfg *config.Cfg) *NodeMapper {
 	NodeMap = new(sync.Map)
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
@@ -37,11 +37,10 @@ func (mapper *NodeMapper) InitializeNodeMapper(cfg *config.Cfg) {
 		log.Fatalf("error creating out of cluster config: %v", err)
 	}
 
-	mapper.clientset = clientset
-	mapper.logger = cfg.Logger
-	go func() {
-		mapper.watchNode()
-	}()
+	return &NodeMapper{
+		clientset: clientset,
+		logger:    cfg.Logger,
+	}
 }
 
 func (mapper *NodeMapper) log(format string, args ...interface{}) {
@@ -83,7 +82,7 @@ func IsOnSameNode(ip string, ip2 string) bool {
 	return true
 }
 
-func (mapper *NodeMapper) watchNode() {
+func (mapper *NodeMapper) WatchNode() {
 	watcher, err := mapper.clientset.CoreV1().Nodes().Watch(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		mapper.logError("watcher err %v", err)

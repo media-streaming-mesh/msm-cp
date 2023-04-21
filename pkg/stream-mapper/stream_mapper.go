@@ -7,6 +7,7 @@ import (
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
 	"github.com/sirupsen/logrus"
 	"sync"
 )
@@ -21,13 +22,17 @@ type StreamId struct {
 
 type StreamMapper struct {
 	logger    *logrus.Logger
+	dataChan  chan model.StreamData
 	streamMap *sync.Map
+	streamAPI *stream_api.StreamAPI
 }
 
 func NewStreamMapper(logger *logrus.Logger, streamMap *sync.Map) *StreamMapper {
 	return &StreamMapper{
 		logger:    logger,
+		dataChan:  make(chan model.StreamData, 1),
 		streamMap: streamMap,
+		streamAPI: stream_api.NewStreamAPI(logger),
 	}
 }
 
@@ -39,7 +44,26 @@ func (m *StreamMapper) logError(format string, args ...interface{}) {
 	m.logger.Errorf("[Stream Mapper] " + fmt.Sprintf(format, args...))
 }
 
-func (m *StreamMapper) ProcessStream(data model.StreamData) error {
+func (m *StreamMapper) WatchStream() {
+	//TODO: process previous cached streams
+	m.streamAPI.GetStreams()
+
+	m.waitForData()
+	m.streamAPI.WatchStreams(m.dataChan)
+}
+
+func (m *StreamMapper) waitForData() {
+	go func() {
+		streamData := <-m.dataChan
+		error := m.processStream(streamData)
+		if error != nil {
+			m.logError("Process stream failed %v", error)
+		}
+		m.waitForData()
+	}()
+}
+
+func (m *StreamMapper) processStream(data model.StreamData) error {
 	var serverProxyIP string
 	var clientProxyIP string
 	var serverDpGrpcClient transport.Client

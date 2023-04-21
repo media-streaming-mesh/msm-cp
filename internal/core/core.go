@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	stream_mapper "github.com/media-streaming-mesh/msm-cp/pkg/stream-mapper"
 	"net"
 	"os"
 	"os/signal"
@@ -33,8 +34,9 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	grpcImpl   API
-	nodeMapper *node_mapper.NodeMapper
+	grpcImpl     API
+	nodeMapper   *node_mapper.NodeMapper
+	streamMapper *stream_mapper.StreamMapper
 }
 
 // Start, starts the MSM Control Plane application.
