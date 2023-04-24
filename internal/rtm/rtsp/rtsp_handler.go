@@ -19,12 +19,11 @@ package rtsp
 import (
 	"errors"
 	"fmt"
+	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/aler9/gortsplib/pkg/base"
 )
 
 // called after receiving an OPTIONS request.
@@ -37,7 +36,6 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 		r.logError("unable to connect to remote")
 		return nil, err
 	}
-
 	stubChannel, ok := r.stubChannels[host]
 	if !ok {
 		return nil, errors.New("can't load stub channel")
@@ -161,7 +159,7 @@ func (r *RTSP) OnSetup(req *base.Request, connectionKey model.ConnectionKey) (*b
 		res, err := r.clientToServer(req, connectionKey)
 		r.log("[s->c] SETUP RESPONSE %+v", res)
 
-		//If stream contains both video and audio, wait for both stream finish setup
+		// If stream contains both video and audio, wait for both stream finish setup
 		//  before setup RTPProxy
 		describeResponse := s_rc.response[Describe]
 		if strings.Contains(describeResponse.String(), "trackID=1") && s_rc.response[Setup] == nil {
@@ -251,10 +249,10 @@ func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) 
 		return nil, err
 	}
 
-	//update rtsp state
+	// update rtsp state
 	rc.state = Teardown
 
-	//Send TEARDOWN to server if last client
+	// Send TEARDOWN to server if last client
 	serverEp := getRemoteIPv4Address(rc.targetRemote)
 	if r.getClientCount(serverEp) == 0 {
 		res, err := r.clientToServer(req, connectionKey)
@@ -429,7 +427,7 @@ func getClientPorts(value base.HeaderValue) []uint32 {
 		transportValues := strings.Split(transportValue, ";")
 		for _, transportL2Value := range transportValues {
 			if strings.Contains(transportL2Value, "interleaved") {
-				//TODO: return 8051 when transport return RTCP
+				// TODO: return 8051 when transport return RTCP
 				ports = append(ports, uint32(8050))
 			}
 			if strings.Contains(transportL2Value, "client_port") {
@@ -454,7 +452,7 @@ func getServerPorts(value base.HeaderValue) []uint32 {
 		transportValues := strings.Split(transportValue, ";")
 		for _, transportL2Value := range transportValues {
 			if strings.Contains(transportL2Value, "interleaved") {
-				//TODO: return 8051 when transport return RTCP
+				// TODO: return 8051 when transport return RTCP
 				ports = append(ports, uint32(8050))
 			}
 			if strings.Contains(transportL2Value, "server_port") {
@@ -474,7 +472,7 @@ func getServerPorts(value base.HeaderValue) []uint32 {
 }
 
 func isInterleaved(value base.HeaderValue) bool {
-	var interleaved = false
+	interleaved := false
 	for _, transportValue := range value {
 		transportValues := strings.Split(transportValue, ";")
 		for _, transportL2Value := range transportValues {

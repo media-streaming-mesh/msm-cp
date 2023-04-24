@@ -26,10 +26,9 @@ import (
 	"sync"
 
 	"github.com/aler9/gortsplib/pkg/base"
-	"github.com/sirupsen/logrus"
-
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
+	"github.com/sirupsen/logrus"
 )
 
 type RTSP struct {
@@ -99,7 +98,6 @@ func NewRTSP(opts ...Option) *RTSP {
 		stubChannels: make(map[string]*model.StubChannel),
 		clientMap:    make(map[string]Client),
 	}
-
 }
 
 func (r *RTSP) log(format string, args ...interface{}) {
@@ -145,6 +143,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 	connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
 	var streamData *model.StreamData
 	var buffer = bytes.NewBuffer(make([]byte, 0, 4096))
+
 	reqReader := bufio.NewReader(strings.NewReader(stream.Data))
 	resReader := bufio.NewReader(strings.NewReader(stream.Data))
 
@@ -157,7 +156,7 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 	if errReq != nil && errRes != nil {
 		return nil, fmt.Errorf("request error=%s response error=%s", errRes, errRes)
 	} else if errReq == nil {
-		//Get client ports
+		// Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
 		if len(clientPorts) != 0 {
 			client := r.clientMap[connectionKey.Key]
@@ -186,20 +185,19 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 
 		r.log("response to client is %v", pbRes)
 
-		//Send response back to client
+		// Send response back to client
 		err = conn.Send(pbRes)
 		if err != nil {
 			return nil, fmt.Errorf("send response error=%s", err)
 		}
 
-		//Get stream data
+		// Get stream data
 		if req.Method == base.Setup {
 			streamData = r.getStreamData(connectionKey, model.Create)
 		}
 		if req.Method == base.Play {
 			streamData = r.getStreamData(connectionKey, model.Play)
 		}
-
 	} else if errRes == nil {
 		// received a server-side response
 		err := r.handleResponse(res, connectionKey)

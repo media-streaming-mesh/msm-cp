@@ -2,8 +2,10 @@ package transport
 
 import (
 	"context"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
+
 	"github.com/sirupsen/logrus"
+
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
 )
 
 // Client holds the client specific data structures
@@ -23,7 +25,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) CreateStream(id uint32, endpointEncap pb.Encap, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
-	//Prepare CREATE data
+	// Prepare CREATE data
 	endpoint := pb.Endpoint{
 		Ip:    ip,
 		Port:  port,
@@ -36,13 +38,13 @@ func (c *Client) CreateStream(id uint32, endpointEncap pb.Encap, ip string, port
 		Endpoint:  &endpoint,
 	}
 
-	//Send data to RTPProxy
+	// Send data to RTPProxy
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return req, stream
 }
 
 func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.StreamData, *pb.StreamResult) {
-	//Prepare DELETE data
+	// Prepare DELETE data
 	endpoint := pb.Endpoint{
 		Ip:   ip,
 		Port: port,
@@ -54,13 +56,13 @@ func (c *Client) DeleteStream(streamId uint32, ip string, port uint32) (pb.Strea
 		Endpoint:  &endpoint,
 	}
 
-	//Send data to RTPProxy
+	// Send data to RTPProxy
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return req, stream
 }
 
 func (c *Client) CreateEndpoint(streamId uint32, endpointEncap pb.Encap, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
-	//Prepare AddEndpoint data
+	// Prepare AddEndpoint data
 	endpoint := pb.Endpoint{
 		Ip:    ip,
 		Port:  port,
@@ -73,13 +75,13 @@ func (c *Client) CreateEndpoint(streamId uint32, endpointEncap pb.Encap, ip stri
 		Endpoint:  &endpoint,
 	}
 
-	//Send data to RTPProxy
+	// Send data to RTPProxy
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return endpoint, stream
 }
 
 func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
-	//Prepare AddEndpoint data
+	// Prepare AddEndpoint data
 
 	endpoint := pb.Endpoint{
 		Ip:   ip,
@@ -93,13 +95,13 @@ func (c *Client) UpdateEndpoint(streamId uint32, ip string, port uint32) (pb.End
 		Enable:    true,
 	}
 
-	//Send data to RTPProxy
+	// Send data to RTPProxy
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return endpoint, stream
 }
 
 func (c *Client) DeleteEndpoint(streamId uint32, ip string, port uint32) (pb.Endpoint, *pb.StreamResult) {
-	//Prepare AddEndpoint data
+	// Prepare AddEndpoint data
 
 	endpoint := pb.Endpoint{
 		Ip:   ip,
@@ -112,7 +114,7 @@ func (c *Client) DeleteEndpoint(streamId uint32, ip string, port uint32) (pb.End
 		Endpoint:  &endpoint,
 	}
 
-	//Send data to RTPProxy
+	// Send data to RTPProxy
 	stream, _ := c.GrpcClient.client.StreamAddDel(context.Background(), &req)
 	return endpoint, stream
 }

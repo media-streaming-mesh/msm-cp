@@ -2,6 +2,12 @@ package core
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/peer"
+	"io"
+	"net"
+	"strings"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
@@ -9,10 +15,6 @@ import (
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
-	"io"
-	"net"
 )
 
 type API interface {
@@ -28,7 +30,6 @@ type Protocol struct {
 }
 
 func New(cfg *config.Cfg) *Protocol {
-
 	return &Protocol{
 		cfg:         cfg,
 		logger:      cfg.Logger,
@@ -47,7 +48,7 @@ func (p *Protocol) logError(format string, args ...interface{}) {
 }
 
 func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
-	var ctx = conn.Context()
+	ctx := conn.Context()
 	for {
 		// exit if context is done or continue
 		select {
@@ -57,7 +58,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		default:
 		}
 
-		//Process stream data
+		// Process stream data
 		stream, err := conn.Recv()
 		if err == io.EOF {
 			// return will close stream-mapper from server side
@@ -75,10 +76,19 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		switch stream.Event {
 		case pb.Event_REGISTER:
 			p.log("Received REGISTER event: %v", stream)
-			//TODO: Find a cleaner way to map node ip for stub
-			contextPeer, _ := peer.FromContext(ctx)
-			remoteAddr, _, _ := net.SplitHostPort(contextPeer.Addr.String())
-			proxyIp, _ := node_mapper.MapNode(remoteAddr)
+			// TODO: Find a cleaner way to map node ip for stub
+			var proxyIp string
+			if stream != nil {
+				nodeInfos := strings.Split(stream.Data, ":")
+				p.log("node infos %v count %v", nodeInfos, len(nodeInfos))
+				if len(nodeInfos) > 0 {
+					proxyIp, _ = node_mapper.MapNode(nodeInfos[0])
+				}
+			}
+			if proxyIp == "" {
+				contextPeer, _ := peer.FromContext(ctx)
+				proxyIp, _, _ = net.SplitHostPort(contextPeer.Addr.String())
+			}
 			p.stubHandler.OnRegistration(conn, proxyIp)
 		case pb.Event_ADD:
 			p.log("Received ADD event: %v", stream)
@@ -98,9 +108,8 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			return err
 		}
 
-		//Send data to proxy
+		// Send data to proxy
 		if streamData != nil {
-			//TODO: Writes logical stream graphs to etcd cluster
 			stubAddress := stub.GetStubAddress(streamData.ClientIp, stream.Remote)
 			p.log("StubAddress %v", stubAddress)
 

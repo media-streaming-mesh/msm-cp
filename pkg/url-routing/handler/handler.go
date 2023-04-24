@@ -61,7 +61,6 @@ func (uh *UrlHandler) log(format string, args ...interface{}) {
 func (uh *UrlHandler) GetInternalURLs(Url string) []string {
 	uh.log("url provided: %s", Url)
 	u, err := url.Parse(Url)
-
 	if err != nil {
 		uh.log("could not parse url: %v", err)
 		return []string{}
@@ -161,7 +160,6 @@ func (uh *UrlHandler) getEndpoints(serviceName string) []string {
 func (uh *UrlHandler) getServiceName(clusterIP string) (string, error) {
 	services, err := uh.clientset.CoreV1().Services(uh.currentNamespace).List(context.TODO(),
 		v1.ListOptions{})
-
 	if err != nil {
 		uh.log("unable to get list of services")
 		return "", nil

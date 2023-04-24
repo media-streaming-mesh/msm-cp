@@ -3,21 +3,21 @@ package stub
 import (
 	"bytes"
 	"fmt"
+	"net"
+	"sync"
+
 	"github.com/aler9/gortsplib/pkg/base"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/peer"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
-	"net"
-	"sync"
 	"time"
 )
 
-var (
-	StubMap *sync.Map
-)
+var StubMap *sync.Map
 
 type StubConnection struct {
 	Address string
@@ -63,7 +63,6 @@ func (s *StubHandler) logError(format string, args ...interface{}) {
 
 // Call when receive REGISTRATION event
 func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp string) {
-
 	// get remote ip addr
 	ctx := conn.Context()
 	p, _ := peer.FromContext(ctx)
@@ -71,6 +70,7 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 
 	//save stub connection on a sync.Map
 	sc := NewStubConnection(remoteAddr, conn)
+
 	StubMap.Store(remoteAddr, sc)
 	s.log("Connection for client: %s successfully registered", remoteAddr)
 
@@ -93,8 +93,7 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 
 // Call when receive ADD event
 func (s *StubHandler) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
-
-	//Stub send to add channel
+	// Stub send to add channel
 	stubAddr := util.GetRemoteIPv4Address(stream.Remote)
 	_, ok := StubMap.Load(stubAddr)
 	if ok {
@@ -132,7 +131,7 @@ func (s *StubHandler) onAddExternalClient(conn pb.MsmControlPlane_SendServer, st
 		return
 	}
 
-	//Add clients to stub
+	// Add clients to stub
 	sc.(*StubConnection).Clients[stream.Remote] = Client{
 		stream.Remote,
 		remoteAddr,
@@ -169,7 +168,7 @@ func (s *StubHandler) onDeleteExternalClient(connectionKey model.ConnectionKey, 
 }
 
 func GetStubAddress(clientIp string, clientId string) string {
-	var stubAddress = clientIp
+	stubAddress := clientIp
 	StubMap.Range(func(key, value interface{}) bool {
 		stub := value.(*StubConnection)
 		for _, c := range stub.Clients {

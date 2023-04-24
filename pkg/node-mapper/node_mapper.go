@@ -3,11 +3,13 @@ package node_mapper
 import (
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/sirupsen/logrus"
 	"log"
 	"net"
 	"sync"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
 
 	v12 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,9 +18,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var (
-	NodeMap *sync.Map
-)
+var NodeMap *sync.Map
 
 type NodeMapper struct {
 	clientset kubernetes.Interface
@@ -56,10 +56,17 @@ func (mapper *NodeMapper) logError(format string, args ...interface{}) {
 func MapNode(ip string) (string, error) {
 	var nodeIP string
 	NodeMap.Range(func(key, value interface{}) bool {
-		_, nodeIPNet, _ := net.ParseCIDR(key.(string))
-		if nodeIPNet.Contains(net.ParseIP(ip)) {
+		if key == ip {
 			nodeIP = value.(string)
+		} else {
+			_, nodeIPNet, error := net.ParseCIDR(key.(string))
+			if error == nil {
+				if nodeIPNet.Contains(net.ParseIP(ip)) {
+					nodeIP = value.(string)
+				}
+			}
 		}
+
 		return true
 	})
 
@@ -90,7 +97,6 @@ func (mapper *NodeMapper) WatchNode() {
 	ch := watcher.ResultChan()
 
 	for event := range ch {
-
 		node, ok := event.Object.(*v12.Node)
 		if ok {
 			switch event.Type {
@@ -98,36 +104,42 @@ func (mapper *NodeMapper) WatchNode() {
 				mapper.addNode(node)
 			case watch.Deleted:
 				mapper.deleteNode(node)
-
 			}
 		}
 	}
 }
+
 func (mapper *NodeMapper) addNode(node *v12.Node) {
 	mapper.log("Added node %v", node.Name)
 	mapper.log("Node PodCIDR %v", node.Spec.PodCIDR)
 	mapper.log("Node Calico IPv4Address %v", node.Annotations["projectcalico.org/IPv4Address"])
 	mapper.log("Node Calico IPv4IPIPTunnelAddr %v", node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"])
 
-	//Key is CIDR
+	// Key is CIDR
 	var key string
-	//calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
+	// calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
 	calicoIPv4PIPTunnel := node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"]
 
 	if calicoIPv4PIPTunnel == "" {
 		key = node.Spec.PodCIDR
 	} else {
-		//n := strings.LastIndex(calicoIPv4, "/")
-		//subnet := calicoIPv4[n:]
+		// n := strings.LastIndex(calicoIPv4, "/")
+		// subnet := calicoIPv4[n:]
 		key = calicoIPv4PIPTunnel + "/26"
 	}
 
-	//Save ip to hashmap
+	// Save ip to hashmap
 	for _, address := range node.Status.Addresses {
 		if address.Type == v12.NodeInternalIP {
-			mapper.log("Store node Internal IP %v with key %v", address.Address, key)
+			NodeMap.Store(node.Name, address.Address)
+
+			// TODO remove these when use stubIp
 			NodeMap.Store(key, address.Address)
 			NodeMap.Store(address.Address+"/32", address.Address) // store nodes's own IP in the map
+
+			mapper.log("Store node Internal IP %v with key %v", address.Address, key)
+			mapper.log("Store node Internal IP %v with key %v", address.Address, address.Address+"/32")
+			mapper.log("Store node Internal IP %v with key %v", address.Address, node.Name)
 		}
 	}
 }

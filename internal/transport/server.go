@@ -48,7 +48,7 @@ func Run(opts ...Option) error {
 
 	wg := sync.WaitGroup{}
 
-	var gprcErrs = make(chan error, 1)
+	gprcErrs := make(chan error, 1)
 	wg.Add(1)
 	go func() {
 		err := grpcServer.start()
