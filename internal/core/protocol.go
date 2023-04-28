@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 	"io"
@@ -10,7 +11,6 @@ import (
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"

@@ -21,7 +21,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"strings"
 	"sync"
 
@@ -219,8 +220,8 @@ func (r *RTSP) getStreamData(connectionKey model.ConnectionKey, streamState mode
 		return nil
 	}
 
-	serverAddress := getRemoteIPv4Address(rc.targetRemote)
-	clientAddress := getRemoteIPv4Address(connectionKey.Remote)
+	serverAddress := util.GetRemoteIPv4Address(rc.targetRemote)
+	clientAddress := util.GetRemoteIPv4Address(connectionKey.Remote)
 	serverPorts := getServerPorts(s_rc.response[Setup].Header["Transport"])
 	client := r.clientMap[connectionKey.Key]
 

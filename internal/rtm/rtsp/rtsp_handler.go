@@ -18,9 +18,9 @@ package rtsp
 
 import (
 	"errors"
-	"fmt"
 	"github.com/aler9/gortsplib/pkg/base"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"net"
 	"strconv"
 	"strings"
@@ -60,7 +60,7 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 	//Update client map
 	client := r.clientMap[connectionKey.Key]
 	r.clientMap[connectionKey.Key] = Client{
-		getRemoteIPv4Address(connectionKey.Remote),
+		util.GetRemoteIPv4Address(connectionKey.Remote),
 		client.clientPorts,
 		host,
 	}
@@ -253,7 +253,7 @@ func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) 
 	rc.state = Teardown
 
 	// Send TEARDOWN to server if last client
-	serverEp := getRemoteIPv4Address(rc.targetRemote)
+	serverEp := util.GetRemoteIPv4Address(rc.targetRemote)
 	if r.getClientCount(serverEp) == 0 {
 		res, err := r.clientToServer(req, connectionKey)
 		r.log("[s->c] TEARDOWN RESPONSE %+v", res)
@@ -363,14 +363,6 @@ func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 	r.log("endpoint to connect: %s", ep)
 
 	return ep.Host, nil
-}
-
-func getRemoteIPv4Address(url string) string {
-	res := strings.ReplaceAll(url, "[", "")
-	res = strings.ReplaceAll(res, "]", "")
-	n := strings.LastIndex(res, ":")
-
-	return fmt.Sprintf("%s", net.ParseIP(res[:n]))
 }
 
 func (r *RTSP) isConnectionOpen(ep string) bool {

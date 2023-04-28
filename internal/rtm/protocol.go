@@ -21,8 +21,8 @@ import (
 	"errors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 // API provides external access to

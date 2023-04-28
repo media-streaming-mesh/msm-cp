@@ -20,9 +20,7 @@ import (
 	"context"
 	"fmt"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	stream_mapper "github.com/media-streaming-mesh/msm-cp/pkg/stream-mapper"
 	"net"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -34,9 +32,8 @@ import (
 type App struct {
 	cfg *config.Cfg
 
-	grpcImpl     API
-	nodeMapper   *node_mapper.NodeMapper
-	streamMapper *stream_mapper.StreamMapper
+	grpcImpl   API
+	nodeMapper *node_mapper.NodeMapper
 }
 
 // Start, starts the MSM Control Plane application.
@@ -49,13 +46,16 @@ func (a *App) Start() error {
 
 	// Capture signals and block before exit
 	ctx, cancel := signal.NotifyContext(context.Background(),
-		os.Interrupt,
-		os.Kill,
 		syscall.SIGHUP,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
 	)
 	defer cancel()
+
+	//Watch node
+	go func() {
+		a.nodeMapper.WatchNode()
+	}()
 
 	// Listen on a port given from initial config
 	grpcPort := fmt.Sprintf("0.0.0.0:%s", a.cfg.Grpc.Port)

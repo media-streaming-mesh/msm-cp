@@ -20,7 +20,8 @@ import (
 	"errors"
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
@@ -97,7 +98,7 @@ func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKe
 }
 
 func (r *RTSP) handleResponse(res *base.Response, connectionKey model.ConnectionKey) error {
-	key := getRemoteIPv4Address(connectionKey.Remote)
+	key := util.GetRemoteIPv4Address(connectionKey.Remote)
 	stubChannel, ok := r.stubChannels[key]
 
 	if !ok {

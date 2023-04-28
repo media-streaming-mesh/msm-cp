@@ -3,6 +3,7 @@ package stub
 import (
 	"bytes"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"net"
 	"sync"
 
@@ -12,7 +13,6 @@ import (
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
 	"time"
 )
