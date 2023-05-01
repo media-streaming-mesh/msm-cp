@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"google.golang.org/protobuf/proto"
 	"time"
 )
 
@@ -49,10 +48,11 @@ func (s *StreamAPI) logError(format string, args ...interface{}) {
 	s.logger.Errorf("[Stream API] " + fmt.Sprintf(format, args...))
 }
 
-func (s *StreamAPI) Put(data msm_cp.StreamData) error {
+func (s *StreamAPI) Put(data model.StreamData) error {
 	//Prepare data
-	protoData, err := proto.Marshal(&data)
-	stringData := string(protoData)
+	//TODO: use protobuf
+	jsonData, err := json.Marshal(data)
+	stringData := string(jsonData)
 
 	//PUT data
 	key := fmt.Sprintf("streamKey:%v", data.ServerIp)
@@ -68,8 +68,8 @@ func (s *StreamAPI) Put(data msm_cp.StreamData) error {
 	return nil
 }
 
-func (s *StreamAPI) GetStreams() ([]msm_cp.StreamData, error) {
-	var streams []msm_cp.StreamData
+func (s *StreamAPI) GetStreams() ([]model.StreamData, error) {
+	var streams []model.StreamData
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Get(ctx, "streamKey", clientv3.WithPrefix())
 	cancel()
@@ -79,15 +79,15 @@ func (s *StreamAPI) GetStreams() ([]msm_cp.StreamData, error) {
 	s.log("GET response %v", resp)
 
 	for _, response := range resp.Kvs {
-		var streamData msm_cp.StreamData
-		proto.Unmarshal(response.Value, &streamData)
+		var streamData model.StreamData
+		json.Unmarshal(response.Value, &streamData)
 		streams = append(streams, streamData)
 		s.log("Stream data %v", streamData)
 	}
 	return streams, nil
 }
 
-func (s *StreamAPI) WatchStreams(dataChan chan<- msm_cp.StreamData) {
+func (s *StreamAPI) WatchStreams(dataChan chan<- model.StreamData) {
 	s.log("Start WATCH")
 	watchChan := s.client.Watch(context.Background(), "streamKey", clientv3.WithPrefix())
 	for resp := range watchChan {
@@ -95,7 +95,7 @@ func (s *StreamAPI) WatchStreams(dataChan chan<- msm_cp.StreamData) {
 			switch event.Type {
 			case mvccpb.PUT:
 				// process with put event
-				var streamData msm_cp.StreamData
+				var streamData model.StreamData
 				json.Unmarshal(event.Kv.Value, &streamData)
 				s.log("Stream data %v", streamData)
 				dataChan <- streamData
