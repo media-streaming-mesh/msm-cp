@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 	"net"
 	"os/signal"
 	"syscall"
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 )
 
 // App contains minimal list of dependencies to be able to start an application.

@@ -65,21 +65,19 @@ func (x *msmControlPlaneSendClient) Recv() (*Message, error) {
 }
 
 // MsmControlPlaneServer is the server API for MsmControlPlane service.
-// All implementations must embed UnimplementedMsmControlPlaneServer
+// All implementations should embed UnimplementedMsmControlPlaneServer
 // for forward compatibility
 type MsmControlPlaneServer interface {
 	Send(MsmControlPlane_SendServer) error
-	mustEmbedUnimplementedMsmControlPlaneServer()
 }
 
-// UnimplementedMsmControlPlaneServer must be embedded to have forward compatible implementations.
+// UnimplementedMsmControlPlaneServer should be embedded to have forward compatible implementations.
 type UnimplementedMsmControlPlaneServer struct {
 }
 
 func (UnimplementedMsmControlPlaneServer) Send(MsmControlPlane_SendServer) error {
 	return status.Errorf(codes.Unimplemented, "method Send not implemented")
 }
-func (UnimplementedMsmControlPlaneServer) mustEmbedUnimplementedMsmControlPlaneServer() {}
 
 // UnsafeMsmControlPlaneServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to MsmControlPlaneServer will

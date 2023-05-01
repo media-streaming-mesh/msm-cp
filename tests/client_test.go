@@ -1,13 +1,13 @@
 package transport
 
 import (
+	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	pb_dp "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_dp"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
 )
 
 func TestCreateStream(t *testing.T) {
