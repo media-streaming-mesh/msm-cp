@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	"github.com/aler9/gortsplib/pkg/base"
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 	"github.com/sirupsen/logrus"
 )

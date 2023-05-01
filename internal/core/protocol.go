@@ -2,19 +2,19 @@ package core
 
 import (
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
+	"github.com/media-streaming-mesh/msm-cp/internal/stub"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
+	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 	"io"
 	"net"
 	"strings"
-
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
 )
 
 type API interface {
@@ -113,16 +113,35 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			stubAddress := stub.GetStubAddress(streamData.ClientIp, stream.Remote)
 			p.log("StubAddress %v", stubAddress)
 
-			streamData := model.StreamData{
+			//streamData := model.StreamData{
+			//	StubIp:      stubAddress,
+			//	ServerIp:    streamData.ServerIp,
+			//	ClientIp:    streamData.ClientIp,
+			//	ServerPorts: streamData.ServerPorts,
+			//	ClientPorts: streamData.ClientPorts,
+			//	StreamState: streamData.StreamState,
+			//}
+
+			streamState := msm_cp.StreamState_CREATE
+			switch streamData.StreamState {
+			case model.Create:
+				streamState = msm_cp.StreamState_CREATE
+			case model.Play:
+				streamState = msm_cp.StreamState_PLAY
+			case model.Teardown:
+				streamState = msm_cp.StreamState_TEARDOWN
+			}
+
+			streamData2 := msm_cp.StreamData{
 				StubIp:      stubAddress,
 				ServerIp:    streamData.ServerIp,
 				ClientIp:    streamData.ClientIp,
-				ServerPorts: streamData.ServerPorts,
-				ClientPorts: streamData.ClientPorts,
-				StreamState: streamData.StreamState,
+				ServerPort:  streamData.ServerPorts[0],
+				ClientPort:  streamData.ClientPorts[0],
+				StreamState: streamState,
 			}
 
-			error := p.streamAPI.Put(streamData)
+			error := p.streamAPI.Put(streamData2)
 
 			if error != nil {
 				p.logError("Put stream to etcd failed %v", error)

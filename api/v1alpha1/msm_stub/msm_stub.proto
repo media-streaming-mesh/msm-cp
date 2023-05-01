@@ -18,19 +18,24 @@ syntax = "proto3";
 
 package msm_cp;
 
-option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_cp;msm_cp";
+option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_stub;msm_stub";
 
-enum StreamState {
-  CREATE = 0;
-  PLAY = 1;
-  TEARDOWN = 2;
+enum Event {
+	REGISTER = 0;
+	CONFIG = 1;
+	REQUEST = 2;
+	ADD = 3;
+	DELETE = 4;
+	DATA = 5;
 }
 
-message StreamData{
-  string stubIp = 1;
-  string serverIp = 2;
-  string clientIp = 3;
-  uint32 serverPort = 4;
-  uint32 clientPort = 5;
-  StreamState streamState = 6;
+service MsmControlPlane {
+	rpc Send (stream Message) returns (stream Message){}
+}
+
+message Message {
+	Event event = 1;
+	string local = 2;
+	string remote = 3;
+	string data = 4;
 }
