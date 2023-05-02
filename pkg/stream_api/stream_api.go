@@ -106,6 +106,19 @@ func (s *StreamAPI) WatchStreams(dataChan chan<- model.StreamData) {
 	}
 }
 
+func (s *StreamAPI) DeleteStream(serverIp string) error {
+	key := fmt.Sprintf("streamKey:%v", serverIp)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	resp, err := s.client.Delete(ctx, key)
+	cancel()
+	if err != nil {
+		return err
+	}
+	s.log("DELETE response %v", resp)
+
+	return nil
+}
+
 func (s *StreamAPI) DeleteStreams() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Delete(ctx, "streamKey", clientv3.WithPrefix())
