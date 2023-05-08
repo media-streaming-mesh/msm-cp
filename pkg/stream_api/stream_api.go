@@ -34,6 +34,8 @@ func NewStreamAPI(logger *logrus.Logger) *StreamAPI {
 		logger.Errorf("[Stream API] create client error %v", err)
 	}
 
+	logger.Infof("[Stream API] created client %v", endpoints)
+
 	return &StreamAPI{
 		logger: logger,
 		client: cli,
@@ -63,7 +65,7 @@ func (s *StreamAPI) Put(data model.StreamData) error {
 		return err
 	}
 	// use the response
-	s.log("PUT response %v", resp)
+	s.log("PUT key %v response %v", key, resp)
 
 	return nil
 }
@@ -88,7 +90,7 @@ func (s *StreamAPI) GetStreams() ([]model.StreamData, error) {
 }
 
 func (s *StreamAPI) WatchStreams(dataChan chan<- model.StreamData) {
-	s.log("Start WATCH")
+	s.log("Start WATCH for key with prefix 'streamKey'")
 	watchChan := s.client.Watch(context.Background(), "streamKey", clientv3.WithPrefix())
 	for resp := range watchChan {
 		for _, event := range resp.Events {
@@ -114,7 +116,7 @@ func (s *StreamAPI) DeleteStream(serverIp string) error {
 	if err != nil {
 		return err
 	}
-	s.log("DELETE response %v", resp)
+	s.log("DELETE %v response %v", serverIp, resp)
 
 	return nil
 }
@@ -126,7 +128,7 @@ func (s *StreamAPI) DeleteStreams() error {
 	if err != nil {
 		return err
 	}
-	s.log("DELETE response %v", resp)
+	s.log("DELETE all keys with prefix 'streamKey' response %v", resp)
 
 	return nil
 }

@@ -3,6 +3,7 @@ package node_mapper
 import (
 	"context"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"log"
 	"net"
 	"sync"
@@ -89,7 +90,7 @@ func IsOnSameNode(ip string, ip2 string) bool {
 	return true
 }
 
-func (mapper *NodeMapper) WatchNode() {
+func (mapper *NodeMapper) WatchNode(nodeChan chan<- model.Node) {
 	watcher, err := mapper.clientset.CoreV1().Nodes().Watch(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		mapper.logError("watcher err %v", err)
@@ -101,15 +102,15 @@ func (mapper *NodeMapper) WatchNode() {
 		if ok {
 			switch event.Type {
 			case watch.Added:
-				mapper.addNode(node)
+				mapper.addNode(node, nodeChan)
 			case watch.Deleted:
-				mapper.deleteNode(node)
+				mapper.deleteNode(node, nodeChan)
 			}
 		}
 	}
 }
 
-func (mapper *NodeMapper) addNode(node *v12.Node) {
+func (mapper *NodeMapper) addNode(node *v12.Node, nodeChan chan<- model.Node) {
 	mapper.log("Added node %v", node.Name)
 	mapper.log("Node PodCIDR %v", node.Spec.PodCIDR)
 	mapper.log("Node Calico IPv4Address %v", node.Annotations["projectcalico.org/IPv4Address"])
@@ -140,11 +141,31 @@ func (mapper *NodeMapper) addNode(node *v12.Node) {
 			mapper.log("Store node Internal IP %v with key %v", address.Address, key)
 			mapper.log("Store node Internal IP %v with key %v", address.Address, address.Address+"/32")
 			mapper.log("Store node Internal IP %v with key %v", address.Address, node.Name)
+
+			//Send node to chanel
+			nodeChan <- model.Node{
+				node.Name,
+				address.Address,
+				model.AddNode,
+			}
+			break
 		}
 	}
 }
 
-func (mapper *NodeMapper) deleteNode(node *v12.Node) {
+func (mapper *NodeMapper) deleteNode(node *v12.Node, nodeChan chan<- model.Node) {
 	mapper.log("Delete node %v", node.Name)
 	NodeMap.Delete(node.Spec.PodCIDR)
+
+	//Send node to chanel
+	for _, address := range node.Status.Addresses {
+		if address.Type == v12.NodeInternalIP {
+			nodeChan <- model.Node{
+				node.Name,
+				address.Address,
+				model.DeleteNode,
+			}
+			break
+		}
+	}
 }

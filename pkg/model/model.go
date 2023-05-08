@@ -93,3 +93,17 @@ type Client struct {
 	ClientIp string
 	Port     uint32
 }
+
+// ============================================= Node =============================================
+type NodeState int
+
+const (
+	AddNode    NodeState = 0
+	DeleteNode NodeState = 1
+)
+
+type Node struct {
+	Name  string
+	IP    string
+	State NodeState
+}

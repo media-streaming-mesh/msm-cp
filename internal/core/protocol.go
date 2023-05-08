@@ -97,6 +97,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			p.log("Received DELETE event: %v", stream)
 			streamData, err = p.rtmImpl.OnDelete(connectionKey)
 			p.stubHandler.OnDelete(connectionKey, conn)
+			p.streamAPI.DeleteStream(connectionKey.Remote)
 		case pb.Event_DATA:
 			p.log("Received DATA event: %v", stream)
 			streamData, err = p.rtmImpl.OnData(conn, stream)
