@@ -3,6 +3,7 @@ package stub
 import (
 	"bytes"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"net"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"google.golang.org/grpc/peer"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
 	"time"
 )

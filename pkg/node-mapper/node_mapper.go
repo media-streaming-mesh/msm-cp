@@ -3,14 +3,13 @@ package node_mapper
 import (
 	"context"
 	"fmt"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"log"
 	"net"
 	"sync"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
 
 	v12 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 

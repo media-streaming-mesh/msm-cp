@@ -3,9 +3,9 @@ package core
 import (
 	"fmt"
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"

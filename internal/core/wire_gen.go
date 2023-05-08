@@ -6,7 +6,7 @@
 package core
 
 import (
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 )
 
