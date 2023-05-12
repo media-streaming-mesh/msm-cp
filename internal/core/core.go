@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 	"net"
@@ -33,6 +34,7 @@ type App struct {
 
 	grpcImpl   API
 	nodeMapper *node_mapper.NodeMapper
+	nodeChan   chan model.Node
 }
 
 // Start, starts the MSM Control Plane application.
@@ -52,8 +54,9 @@ func (a *App) Start() error {
 	defer cancel()
 
 	//Watch node
+	a.waitForData()
 	go func() {
-		a.nodeMapper.WatchNode()
+		a.nodeMapper.WatchNode(a.nodeChan)
 	}()
 
 	// Listen on a port given from initial config
@@ -88,4 +91,12 @@ func (a *App) Start() error {
 	}
 	fmt.Println("Exit")
 	return nil
+}
+
+func (a *App) waitForData() {
+	go func() {
+		node := <-a.nodeChan
+		fmt.Println("Found node %v", node.IP)
+		a.waitForData()
+	}()
 }

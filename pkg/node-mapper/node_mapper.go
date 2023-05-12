@@ -94,8 +94,8 @@ func (mapper *NodeMapper) WatchNode(nodeChan chan<- model.Node) {
 	if err != nil {
 		mapper.logError("watcher err %v", err)
 	}
+	mapper.log("Start watch node")
 	ch := watcher.ResultChan()
-
 	for event := range ch {
 		node, ok := event.Object.(*v12.Node)
 		if ok {
@@ -115,18 +115,7 @@ func (mapper *NodeMapper) addNode(node *v12.Node, nodeChan chan<- model.Node) {
 	mapper.log("Node Calico IPv4Address %v", node.Annotations["projectcalico.org/IPv4Address"])
 	mapper.log("Node Calico IPv4IPIPTunnelAddr %v", node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"])
 
-	// Key is CIDR
-	var key string
-	// calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
-	calicoIPv4PIPTunnel := node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"]
-
-	if calicoIPv4PIPTunnel == "" {
-		key = node.Spec.PodCIDR
-	} else {
-		// n := strings.LastIndex(calicoIPv4, "/")
-		// subnet := calicoIPv4[n:]
-		key = calicoIPv4PIPTunnel + "/26"
-	}
+	key := mapper.getKey(node)
 
 	// Save ip to hashmap
 	for _, address := range node.Status.Addresses {
@@ -154,11 +143,15 @@ func (mapper *NodeMapper) addNode(node *v12.Node, nodeChan chan<- model.Node) {
 
 func (mapper *NodeMapper) deleteNode(node *v12.Node, nodeChan chan<- model.Node) {
 	mapper.log("Delete node %v", node.Name)
-	NodeMap.Delete(node.Spec.PodCIDR)
 
-	//Send node to chanel
+	key := mapper.getKey(node)
+
 	for _, address := range node.Status.Addresses {
 		if address.Type == v12.NodeInternalIP {
+			NodeMap.Delete(node.Name)
+			NodeMap.Delete(key)
+			NodeMap.Delete(address.Address + "/32")
+
 			nodeChan <- model.Node{
 				node.Name,
 				address.Address,
@@ -167,4 +160,20 @@ func (mapper *NodeMapper) deleteNode(node *v12.Node, nodeChan chan<- model.Node)
 			break
 		}
 	}
+}
+
+func (mapper *NodeMapper) getKey(node *v12.Node) string {
+	// Key is CIDR
+	var key string
+	// calicoIPv4 := node.Annotations["projectcalico.org/IPv4Address"]
+	calicoIPv4PIPTunnel := node.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"]
+
+	if calicoIPv4PIPTunnel == "" {
+		key = node.Spec.PodCIDR
+	} else {
+		// n := strings.LastIndex(calicoIPv4, "/")
+		// subnet := calicoIPv4[n:]
+		key = calicoIPv4PIPTunnel + "/26"
+	}
+	return key
 }

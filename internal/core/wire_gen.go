@@ -7,6 +7,7 @@ package core
 
 import (
 	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 )
 
@@ -22,6 +23,7 @@ func InitApp() (*App, error) {
 		cfg:     cfg,
 		grpcImpl: grpcImpl,
 		nodeMapper: nodeMapper,
+		nodeChan: make(chan model.Node, 1),
 	}
 	return app, nil
 }
