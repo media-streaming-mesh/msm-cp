@@ -13,7 +13,7 @@ import (
 
 var (
 	//TODO read endpoint from config
-	endpoints      = []string{"192.168.49.3:2379"}
+	endpoints      = []string{"10.96.20.1:2379"}
 	dialTimeout    = 10 * time.Second
 	requestTimeout = 10 * time.Second
 )
