@@ -22,7 +22,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 )
 
 // Option configures Run

@@ -18,7 +18,7 @@ syntax = "proto3";
 
 package msm_cp;
 
-option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_cp;msm_cp";
+option go_package = "github.com/media-streaming-mesh/msm-cp/url-routing/v1alpha1/msm_stub;msm_stub";
 
 enum Event {
 	REGISTER = 0;

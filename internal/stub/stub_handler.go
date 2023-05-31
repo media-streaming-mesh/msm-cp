@@ -1,37 +1,35 @@
 package stub
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"sync"
+	"time"
+
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
 )
 
 var StubMap *sync.Map
 
 type StubConnection struct {
-	Address     string
-	Conn        pb.MsmControlPlane_SendServer
-	Data        pb.Message
-	SendToAddCh bool
-	AddCh       chan *pb.Message
-	DataCh      chan *base.Response
-	Clients     map[string]Client
+	Address string
+	Conn    pb.MsmControlPlane_SendServer
+	Clients map[string]Client
 }
 
 func NewStubConnection(address string, conn pb.MsmControlPlane_SendServer) *StubConnection {
 	return &StubConnection{
 		Address: address,
 		Conn:    conn,
-		AddCh:   make(chan *pb.Message, 1),
-		DataCh:  make(chan *base.Response, 1),
 		Clients: make(map[string]Client),
 	}
 }
@@ -43,14 +41,16 @@ type Client struct {
 }
 
 type StubHandler struct {
-	logger *logrus.Logger
+	logger       *logrus.Logger
+	StubChannels map[string]*model.StubChannel
 }
 
 func NewStubHandler(cfg *config.Cfg) *StubHandler {
 	StubMap = new(sync.Map)
 
 	return &StubHandler{
-		logger: cfg.Logger,
+		logger:       cfg.Logger,
+		StubChannels: make(map[string]*model.StubChannel),
 	}
 }
 
@@ -69,31 +69,51 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 	p, _ := peer.FromContext(ctx)
 	remoteAddr, _, _ := net.SplitHostPort(p.Addr.String())
 
+	// save stub connection on a sync.Map
 	sc := NewStubConnection(remoteAddr, conn)
 
-	// Send node ip address to stub
-	s.log("Send msm-proxy ip %v:8050 to %v", proxyIp, remoteAddr)
-	configMsg := &pb.Message{
-		Event:  pb.Event_CONFIG,
-		Remote: fmt.Sprintf("%s:8050", proxyIp),
-	}
-	sc.Conn.Send(configMsg)
-
-	// save stub connection on a sync.Map
 	StubMap.Store(remoteAddr, sc)
 	s.log("Connection for client: %s successfully registered", remoteAddr)
+
+	// create channels
+	channel := model.NewStubChannel()
+	s.StubChannels[remoteAddr] = &channel
+	s.log("Add channels to %v", remoteAddr)
+
+	// wait for request
+	s.waitForRequest(remoteAddr)
+
+	// send config
+	channel.Request <- model.StubChannelRequest{
+		model.Config,
+		"",
+		proxyIp,
+		nil,
+	}
 }
 
 // Call when receive ADD event
 func (s *StubHandler) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
 	// Stub send to add channel
 	stubAddr := util.GetRemoteIPv4Address(stream.Remote)
-	sc, ok := StubMap.Load(stubAddr)
+	_, ok := StubMap.Load(stubAddr)
 	if ok {
-		sc.(*StubConnection).Data = *stream
-		sc.(*StubConnection).AddCh <- stream
-		sc.(*StubConnection).SendToAddCh = true
-		s.log("StubConnection send %v to add channel", stream)
+		connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
+		stubChannel, ok := s.StubChannels[stubAddr]
+		if ok {
+			stubChannel.Key = model.NewConnectionKey(stream.Local, stream.Remote)
+			stubChannel.Response <- model.StubChannelResponse{
+				nil,
+				&base.Response{
+					StatusCode: base.StatusOK,
+					Header:     base.Header{},
+				},
+			}
+			stubChannel.ReceivedResponse = true
+		} else {
+			s.logError("Can't find stub channel for %v", stubAddr)
+		}
+		s.log("send %v to receiveAdd channel", connectionKey)
 	} else {
 		s.onAddExternalClient(conn, stream)
 	}
@@ -122,35 +142,30 @@ func (s *StubHandler) onAddExternalClient(conn pb.MsmControlPlane_SendServer, st
 }
 
 // Call when receive DELETE event
-func (s *StubHandler) OnDelete(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (s *StubHandler) OnDelete(connectionKey model.ConnectionKey, conn pb.MsmControlPlane_SendServer) {
 	// Stub unblock add chanel
-	stubAddr := util.GetRemoteIPv4Address(stream.Remote)
-	sc, ok := StubMap.Load(stubAddr)
-	if ok {
-		if sc.(*StubConnection).SendToAddCh {
-			<-sc.(*StubConnection).AddCh
-			sc.(*StubConnection).SendToAddCh = false
-		}
-	} else {
-		s.onDeleteExternalClient(conn, stream)
+	stubAddr := util.GetRemoteIPv4Address(connectionKey.Remote)
+	_, ok := StubMap.Load(stubAddr)
+	if !ok {
+		s.onDeleteExternalClient(connectionKey, conn)
 	}
 }
 
-func (s *StubHandler) onDeleteExternalClient(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (s *StubHandler) onDeleteExternalClient(connectionKey model.ConnectionKey, conn pb.MsmControlPlane_SendServer) {
 	// get remote ip addr
 	ctx := conn.Context()
 	p, _ := peer.FromContext(ctx)
 	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	remoteAddr := util.GetRemoteIPv4Address(stream.Remote)
+	remoteAddr := util.GetRemoteIPv4Address(connectionKey.Remote)
 
 	sc, ok := StubMap.Load(stubAddr)
 	if !ok {
 		s.logError("Gateway stub connection was not found! %v", stubAddr)
 		return
 	}
-	delete(sc.(*StubConnection).Clients, stream.Remote)
+	delete(sc.(*StubConnection).Clients, connectionKey.Remote)
 	s.log("Connection for external client: %s successfully close", remoteAddr)
-	s.log("Delete client %v with key %v from stub %v", remoteAddr, stream.Remote, stubAddr)
+	s.log("Delete client %v with key %v from stub %v", remoteAddr, connectionKey.Remote, stubAddr)
 }
 
 func GetStubAddress(clientIp string, clientId string) string {
@@ -166,4 +181,66 @@ func GetStubAddress(clientIp string, clientId string) string {
 		return true
 	})
 	return stubAddress
+}
+
+func (s *StubHandler) waitForRequest(key string) {
+	channel := s.StubChannels[key]
+	go func() {
+		request := <-channel.Request
+		timeout := request.Type != model.Config
+		s.log("Processing request %v", request.Type)
+		s.sendRequest(channel, key, request, timeout)
+	}()
+}
+
+func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, request model.StubChannelRequest, timeout bool) {
+	stubConn, ok := StubMap.Load(key)
+	if !ok {
+		s.logError("could not find stub connection for %v", key)
+	}
+
+	var msg *pb.Message
+	switch request.Type {
+	case model.Config:
+		msg = &pb.Message{
+			Event:  pb.Event_CONFIG,
+			Remote: fmt.Sprintf("%s:8050", request.Remote),
+		}
+	case model.Add:
+		msg = &pb.Message{
+			Event:  pb.Event_REQUEST,
+			Remote: request.Remote,
+		}
+	case model.Data:
+		data := bytes.NewBuffer(make([]byte, 0, 4096))
+		request.Request.Write(data)
+		msg = &pb.Message{
+			Event:  pb.Event_DATA,
+			Local:  request.Local,
+			Remote: request.Remote,
+			Data:   fmt.Sprintf("%s", data),
+		}
+	}
+	stubConn.(*StubConnection).Conn.Send(msg)
+	s.log("Send %v with %v to %v", request.Type, msg, key)
+
+	// start wait for request again
+	s.waitForRequest(key)
+
+	channel.ReceivedResponse = false
+	if timeout {
+		time.Sleep(time.Second * 15)
+		if channel.ReceivedResponse == false {
+			s.log("Timeout request %v %v", request.Type, request.Request)
+			s.logError("Send %v to %v timeout", request.Type, key)
+			channel.Response <- model.StubChannelResponse{
+				fmt.Errorf("Stub request timeout"),
+				&base.Response{
+					StatusCode: base.StatusRequestTimeout,
+					Header:     base.Header{},
+				},
+			}
+			channel.ReceivedResponse = true
+		}
+	}
 }

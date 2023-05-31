@@ -21,26 +21,26 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
+
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
-	"github.com/media-streaming-mesh/msm-cp/internal/stub"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 )
 
 type RTSP struct {
-	urlHandler *msm_url.UrlHandler
-	logger     *logrus.Logger
-	methods    []base.Method
-	rtspConn   *sync.Map
-	clientMap  map[string]Client
+	urlHandler   *msm_url.UrlHandler
+	logger       *logrus.Logger
+	methods      []base.Method
+	rtspConn     *sync.Map
+	stubChannels map[string]*model.StubChannel
+	clientMap    map[string]Client
 }
 
 type Client struct {
@@ -94,11 +94,12 @@ func NewRTSP(opts ...Option) *RTSP {
 	uHandler.InitializeUrlHandler()
 
 	return &RTSP{
-		urlHandler: uHandler,
-		logger:     cfg.Logger,
-		methods:    cfg.SupportedMethods,
-		rtspConn:   new(sync.Map),
-		clientMap:  make(map[string]Client),
+		urlHandler:   uHandler,
+		logger:       cfg.Logger,
+		methods:      cfg.SupportedMethods,
+		rtspConn:     new(sync.Map),
+		stubChannels: make(map[string]*model.StubChannel),
+		clientMap:    make(map[string]Client),
 	}
 }
 
@@ -113,48 +114,39 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 }
 
 // called when a connection is opened.
-func (r *RTSP) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
-	// Get stub connection
-	ctx := conn.Context()
-	p, _ := peer.FromContext(ctx)
-	stubAddr, _, _ := net.SplitHostPort(p.Addr.String())
-	sc, ok := stub.StubMap.Load(stubAddr)
+func (r *RTSP) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
+	// Store channel
+	r.stubChannels = stubChannels
 
 	// create a new RTSP connection and store it
 	rc := newRTSPConnection(r.logger)
-	rc.author = stream.Remote
+	rc.author = connectionKey.Remote
 
-	if ok && sc != nil {
-		rc.targetLocal = sc.(*stub.StubConnection).Data.Local
-		rc.targetRemote = sc.(*stub.StubConnection).Data.Remote
-	}
-
-	key := getRTSPConnectionKey(stream.Local, stream.Remote)
-	r.rtspConn.Store(key, rc)
-	r.log("RTSP connection key %v", key)
-	r.log("RTSP connection opened from client %s", stream.Remote)
+	r.rtspConn.Store(connectionKey.Key, rc)
+	r.log("RTSP connection key %v", connectionKey.Key)
+	r.log("RTSP connection opened from client %s", connectionKey.Remote)
 }
 
 // called when a connection is close.
-func (r *RTSP) OnDelete(stream *pb.Message) (*model.StreamData, error) {
+func (r *RTSP) OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, error) {
 	// Get stream data
-	streamData := r.getStreamData(stream, model.Teardown)
+	streamData := r.getStreamData(connectionKey, model.Teardown)
 	// Find RTSP connection and delete it
-	key := getRTSPConnectionKey(stream.Local, stream.Remote)
-	r.rtspConn.Delete(key)
+	r.rtspConn.Delete(connectionKey.Key)
 
 	// Delete client from client map
-	connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
-	delete(r.clientMap, connectionKey)
-	r.log("RTSP connection closed from client %s", stream.Remote)
+	delete(r.clientMap, connectionKey.Key)
+	r.log("RTSP connection closed from client %s", connectionKey.Remote)
 
 	return streamData, nil
 }
 
 func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
 	// Read stream data
+	connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
 	var streamData *model.StreamData
-	data := bytes.NewBuffer(make([]byte, 0, 4096))
+	buffer := bytes.NewBuffer(make([]byte, 0, 4096))
+
 	reqReader := bufio.NewReader(strings.NewReader(stream.Data))
 	resReader := bufio.NewReader(strings.NewReader(stream.Data))
 
@@ -170,9 +162,8 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 		// Get client ports
 		clientPorts := getClientPorts(req.Header["Transport"])
 		if len(clientPorts) != 0 {
-			connectionKey := getRTSPConnectionKey(stream.Local, stream.Remote)
-			client := r.clientMap[connectionKey]
-			r.clientMap[connectionKey] = Client{
+			client := r.clientMap[connectionKey.Key]
+			r.clientMap[connectionKey.Key] = Client{
 				clientIp:    client.clientIp,
 				clientPorts: clientPorts,
 				serverIp:    client.serverIp,
@@ -180,19 +171,19 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 		}
 
 		if req.Method == base.Teardown {
-			streamData = r.getStreamData(stream, model.Teardown)
+			streamData = r.getStreamData(connectionKey, model.Teardown)
 		}
 		// received a client-side request
-		pbMsg, err := r.handleRequest(req, stream)
+		pbMsg, err := r.handleRequest(req, connectionKey)
 		if err != nil {
 			return nil, fmt.Errorf("handle request error=%s", err)
 		}
-		pbMsg.Write(data)
+		pbMsg.Write(buffer)
 		pbRes := &pb.Message{
 			Event:  stream.Event,
 			Local:  stream.Local,
 			Remote: stream.Remote,
-			Data:   fmt.Sprintf("%s", data),
+			Data:   fmt.Sprintf("%s", buffer),
 		}
 
 		r.log("response to client is %v", pbRes)
@@ -205,14 +196,14 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 
 		// Get stream data
 		if req.Method == base.Setup {
-			streamData = r.getStreamData(stream, model.Create)
+			streamData = r.getStreamData(connectionKey, model.Create)
 		}
 		if req.Method == base.Play {
-			streamData = r.getStreamData(stream, model.Play)
+			streamData = r.getStreamData(connectionKey, model.Play)
 		}
 	} else if errRes == nil {
 		// received a server-side response
-		err := r.handleResponse(res, stream)
+		err := r.handleResponse(res, connectionKey)
 		if err != nil {
 			return nil, fmt.Errorf("handle response error=%s", err)
 		}
@@ -220,21 +211,21 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 	return streamData, nil
 }
 
-func (r *RTSP) getStreamData(stream *pb.Message, streamState model.StreamState) *model.StreamData {
-	rc, err := r.getClientRTSPConnection(stream)
+func (r *RTSP) getStreamData(connectionKey model.ConnectionKey, streamState model.StreamState) *model.StreamData {
+	rc, err := r.getClientRTSPConnection(connectionKey)
 	if err != nil {
 		return nil
 	}
 
-	s_rc, err := r.getRemoteRTSPConnection(stream)
+	s_rc, err := r.getRemoteRTSPConnection(connectionKey)
 	if err != nil {
 		return nil
 	}
 
-	serverAddress := getRemoteIPv4Address(rc.targetRemote)
-	clientAddress := getRemoteIPv4Address(stream.Remote)
+	serverAddress := util.GetRemoteIPv4Address(rc.targetRemote)
+	clientAddress := util.GetRemoteIPv4Address(connectionKey.Remote)
 	serverPorts := getServerPorts(s_rc.response[Setup].Header["Transport"])
-	client := r.clientMap[getRTSPConnectionKey(stream.Local, stream.Remote)]
+	client := r.clientMap[connectionKey.Key]
 
 	r.log("server address/ports %v %v", serverAddress, serverPorts)
 	r.log("client address/ports %v %v", clientAddress, client.clientPorts)

@@ -20,16 +20,16 @@ import (
 	"context"
 	"errors"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 // API provides external access to
 type API interface {
-	OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message)
-	OnDelete(stream *pb.Message) (*model.StreamData, error)
+	OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel)
+	OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, error)
 	OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error)
 }
 
@@ -54,20 +54,20 @@ func New(cfg *config.Cfg) *Protocol {
 	}
 }
 
-func (p *Protocol) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Message) {
+func (p *Protocol) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
 	proto := p.cfg.Protocol
 	switch proto {
 	case "rtsp":
-		p.rtsp.OnAdd(conn, stream)
+		p.rtsp.OnAdd(connectionKey, stubChannels)
 	default:
 	}
 }
 
-func (p *Protocol) OnDelete(stream *pb.Message) (*model.StreamData, error) {
+func (p *Protocol) OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, error) {
 	proto := p.cfg.Protocol
 	switch proto {
 	case "rtsp":
-		return p.rtsp.OnDelete(stream)
+		return p.rtsp.OnDelete(connectionKey)
 	default:
 	}
 	return nil, errors.New("Failed to get rtm protocol type from config")

@@ -5,18 +5,17 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 
-	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_cp"
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/model"
+	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	stream_mapper "github.com/media-streaming-mesh/msm-cp/pkg/stream-mapper"
+	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
 )
 
 type API interface {
@@ -28,18 +27,16 @@ type Protocol struct {
 	logger      *logrus.Logger
 	stubHandler *stub.StubHandler
 	rtmImpl     rtm.API
-
-	// TODO: move stream_mapper to msm-nc
-	streamMapper *stream_mapper.StreamMapper
+	streamAPI   *stream_api.StreamAPI
 }
 
 func New(cfg *config.Cfg) *Protocol {
 	return &Protocol{
-		cfg:          cfg,
-		logger:       cfg.Logger,
-		stubHandler:  stub.NewStubHandler(cfg),
-		streamMapper: stream_mapper.NewStreamMapper(cfg.Logger, new(sync.Map)),
-		rtmImpl:      rtm.New(cfg),
+		cfg:         cfg,
+		logger:      cfg.Logger,
+		stubHandler: stub.NewStubHandler(cfg),
+		rtmImpl:     rtm.New(cfg),
+		streamAPI:   stream_api.NewStreamAPI(cfg.Logger),
 	}
 }
 
@@ -75,6 +72,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 		}
 
 		var streamData *model.StreamData
+		connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
 
 		switch stream.Event {
 		case pb.Event_REGISTER:
@@ -95,12 +93,13 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			p.stubHandler.OnRegistration(conn, proxyIp)
 		case pb.Event_ADD:
 			p.log("Received ADD event: %v", stream)
-			p.rtmImpl.OnAdd(conn, stream)
+			p.rtmImpl.OnAdd(connectionKey, p.stubHandler.StubChannels)
 			p.stubHandler.OnAdd(conn, stream)
 		case pb.Event_DELETE:
 			p.log("Received DELETE event: %v", stream)
-			streamData, err = p.rtmImpl.OnDelete(stream)
-			p.stubHandler.OnDelete(conn, stream)
+			streamData, err = p.rtmImpl.OnDelete(connectionKey)
+			p.stubHandler.OnDelete(connectionKey, conn)
+			p.streamAPI.DeleteStream(connectionKey.Remote)
 		case pb.Event_DATA:
 			p.log("Received DATA event: %v", stream)
 			streamData, err = p.rtmImpl.OnData(conn, stream)
@@ -113,21 +112,22 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 
 		// Send data to proxy
 		if streamData != nil {
-			// TODO: Writes logical stream graphs to etcd cluster
 			stubAddress := stub.GetStubAddress(streamData.ClientIp, stream.Remote)
 			p.log("StubAddress %v", stubAddress)
 
-			error := p.streamMapper.ProcessStream(model.StreamData{
+			streamData := model.StreamData{
 				StubIp:      stubAddress,
 				ServerIp:    streamData.ServerIp,
 				ClientIp:    streamData.ClientIp,
 				ServerPorts: streamData.ServerPorts,
 				ClientPorts: streamData.ClientPorts,
 				StreamState: streamData.StreamState,
-			})
+			}
+
+			error := p.streamAPI.Put(streamData)
 
 			if error != nil {
-				p.logError("ProcessStream failed %v", error)
+				p.logError("Put stream to etcd failed %v", error)
 			}
 		}
 	}

@@ -13,7 +13,3 @@ func GetRemoteIPv4Address(url string) string {
 
 	return fmt.Sprintf("%s", net.ParseIP(res[:n]))
 }
-
-func GetConnectionKey(s1, s2 string) string {
-	return fmt.Sprintf("%s%s", s1, s2)
-}

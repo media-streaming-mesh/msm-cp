@@ -20,14 +20,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/media-streaming-mesh/msm-cp/internal/transport"
+	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 )
 
 // App contains minimal list of dependencies to be able to start an application.
@@ -36,6 +35,7 @@ type App struct {
 
 	grpcImpl   API
 	nodeMapper *node_mapper.NodeMapper
+	nodeChan   chan model.Node
 }
 
 // Start, starts the MSM Control Plane application.
@@ -48,13 +48,17 @@ func (a *App) Start() error {
 
 	// Capture signals and block before exit
 	ctx, cancel := signal.NotifyContext(context.Background(),
-		os.Interrupt,
-		os.Kill,
 		syscall.SIGHUP,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
 	)
 	defer cancel()
+
+	// Watch node
+	a.waitForData()
+	go func() {
+		a.nodeMapper.WatchNode(a.nodeChan)
+	}()
 
 	// Listen on a port given from initial config
 	grpcPort := fmt.Sprintf("0.0.0.0:%s", a.cfg.Grpc.Port)
@@ -88,4 +92,12 @@ func (a *App) Start() error {
 	}
 	fmt.Println("Exit")
 	return nil
+}
+
+func (a *App) waitForData() {
+	go func() {
+		node := <-a.nodeChan
+		fmt.Printf("Found node %v\n", node.IP)
+		a.waitForData()
+	}()
 }
