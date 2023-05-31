@@ -3,7 +3,7 @@ module github.com/media-streaming-mesh/msm-cp
 go 1.20
 
 require (
-	github.com/aler9/gortsplib v0.0.0-20220410133005-d479e9ee7dc8
+	github.com/aler9/gortsplib v1.0.1
 	github.com/google/wire v0.5.0
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.4
