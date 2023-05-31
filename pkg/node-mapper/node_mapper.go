@@ -3,11 +3,12 @@ package node_mapper
 import (
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"log"
 	"net"
 	"sync"
+
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 
 	"github.com/sirupsen/logrus"
 
@@ -130,7 +131,7 @@ func (mapper *NodeMapper) addNode(node *v12.Node, nodeChan chan<- model.Node) {
 			mapper.log("Store node Internal IP %v with key %v", address.Address, address.Address+"/32")
 			mapper.log("Store node Internal IP %v with key %v", address.Address, node.Name)
 
-			//Send node to chanel
+			// Send node to chanel
 			nodeChan <- model.Node{
 				node.Name,
 				address.Address,

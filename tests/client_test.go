@@ -1,8 +1,9 @@
 package transport
 
 import (
-	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 	"testing"
+
+	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"

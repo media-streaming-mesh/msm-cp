@@ -3,10 +3,12 @@ package stub
 import (
 	"bytes"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"net"
 	"sync"
+	"time"
+
+	"github.com/media-streaming-mesh/msm-cp/pkg/config"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
@@ -14,7 +16,6 @@ import (
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"time"
 )
 
 var StubMap *sync.Map
@@ -68,21 +69,21 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 	p, _ := peer.FromContext(ctx)
 	remoteAddr, _, _ := net.SplitHostPort(p.Addr.String())
 
-	//save stub connection on a sync.Map
+	// save stub connection on a sync.Map
 	sc := NewStubConnection(remoteAddr, conn)
 
 	StubMap.Store(remoteAddr, sc)
 	s.log("Connection for client: %s successfully registered", remoteAddr)
 
-	//create channels
+	// create channels
 	channel := model.NewStubChannel()
 	s.StubChannels[remoteAddr] = &channel
 	s.log("Add channels to %v", remoteAddr)
 
-	//wait for request
+	// wait for request
 	s.waitForRequest(remoteAddr)
 
-	//send config
+	// send config
 	channel.Request <- model.StubChannelRequest{
 		model.Config,
 		"",
@@ -142,7 +143,7 @@ func (s *StubHandler) onAddExternalClient(conn pb.MsmControlPlane_SendServer, st
 
 // Call when receive DELETE event
 func (s *StubHandler) OnDelete(connectionKey model.ConnectionKey, conn pb.MsmControlPlane_SendServer) {
-	//Stub unblock add chanel
+	// Stub unblock add chanel
 	stubAddr := util.GetRemoteIPv4Address(connectionKey.Remote)
 	_, ok := StubMap.Load(stubAddr)
 	if !ok {
@@ -223,7 +224,7 @@ func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, reques
 	stubConn.(*StubConnection).Conn.Send(msg)
 	s.log("Send %v with %v to %v", request.Type, msg, key)
 
-	//start wait for request again
+	// start wait for request again
 	s.waitForRequest(key)
 
 	channel.ReceivedResponse = false

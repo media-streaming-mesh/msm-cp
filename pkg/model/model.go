@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+
 	"github.com/aler9/gortsplib/pkg/base"
 )
 

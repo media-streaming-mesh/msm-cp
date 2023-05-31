@@ -2,6 +2,13 @@ package core
 
 import (
 	"fmt"
+	"io"
+	"net"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/peer"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
@@ -9,11 +16,6 @@ import (
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/peer"
-	"io"
-	"net"
-	"strings"
 )
 
 type API interface {

@@ -4,15 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
+	"time"
+
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"time"
+
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 var (
-	//TODO read endpoint from config
+	// TODO read endpoint from config
 	endpoints      = []string{"etcd-client:2379"}
 	dialTimeout    = 10 * time.Second
 	requestTimeout = 10 * time.Second
@@ -24,12 +26,10 @@ type StreamAPI struct {
 }
 
 func NewStreamAPI(logger *logrus.Logger) *StreamAPI {
-
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: dialTimeout,
 	})
-
 	if err != nil {
 		logger.Errorf("[Stream API] create client error %v", err)
 	}
@@ -51,12 +51,12 @@ func (s *StreamAPI) logError(format string, args ...interface{}) {
 }
 
 func (s *StreamAPI) Put(data model.StreamData) error {
-	//Prepare data
-	//TODO: use protobuf
+	// Prepare data
+	// TODO: use protobuf
 	jsonData, err := json.Marshal(data)
 	stringData := string(jsonData)
 
-	//PUT data
+	// PUT data
 	key := fmt.Sprintf("streamKey:%v", data.ServerIp)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Put(ctx, key, stringData)

@@ -18,12 +18,14 @@ package rtsp
 
 import (
 	"errors"
-	"github.com/aler9/gortsplib/pkg/base"
-	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/aler9/gortsplib/pkg/base"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 // called after receiving an OPTIONS request.
@@ -57,7 +59,7 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 		return nil, err
 	}
 
-	//Update client map
+	// Update client map
 	client := r.clientMap[connectionKey.Key]
 	r.clientMap[connectionKey.Key] = Client{
 		util.GetRemoteIPv4Address(connectionKey.Remote),
@@ -241,7 +243,7 @@ func (r *RTSP) OnGetParameter(req *base.Request, connectionKey model.ConnectionK
 func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
 	r.log("[c->s] %+v", req)
 
-	//Delete client from clientMap
+	// Delete client from clientMap
 	delete(r.clientMap, connectionKey.Key)
 
 	rc, err := r.getClientRTSPConnection(connectionKey)
@@ -267,7 +269,6 @@ func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) 
 }
 
 func (r *RTSP) connectToRemote(req *base.Request) (string, error) {
-
 	// Find the remote endpoint to connect
 	ep, err := r.getEndpointFromPath(req.URL)
 	if err != nil {
@@ -320,7 +321,7 @@ func (r *RTSP) clientToServer(req *base.Request, connectionKey model.ConnectionK
 		return nil, errors.New("can't load stub channel")
 	}
 
-	//Send request and waiting for response
+	// Send request and waiting for response
 	stubChannel.Request <- model.StubChannelRequest{
 		model.Data,
 		sc.(*RTSPConnection).targetLocal,

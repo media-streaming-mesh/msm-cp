@@ -19,13 +19,14 @@ package core
 import (
 	"context"
 	"fmt"
+	"net"
+	"os/signal"
+	"syscall"
+
 	"github.com/media-streaming-mesh/msm-cp/pkg/config"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
 	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
-	"net"
-	"os/signal"
-	"syscall"
 )
 
 // App contains minimal list of dependencies to be able to start an application.
@@ -53,7 +54,7 @@ func (a *App) Start() error {
 	)
 	defer cancel()
 
-	//Watch node
+	// Watch node
 	a.waitForData()
 	go func() {
 		a.nodeMapper.WatchNode(a.nodeChan)
@@ -96,7 +97,7 @@ func (a *App) Start() error {
 func (a *App) waitForData() {
 	go func() {
 		node := <-a.nodeChan
-		fmt.Println("Found node %v", node.IP)
+		fmt.Printf("Found node %v\n", node.IP)
 		a.waitForData()
 	}()
 }

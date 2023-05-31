@@ -21,15 +21,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 	"strings"
 	"sync"
 
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+	"github.com/media-streaming-mesh/msm-cp/pkg/model"
+
 	"github.com/aler9/gortsplib/pkg/base"
+	"github.com/sirupsen/logrus"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
-	"github.com/sirupsen/logrus"
 )
 
 type RTSP struct {
@@ -113,7 +115,7 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 
 // called when a connection is opened.
 func (r *RTSP) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
-	//Store channel
+	// Store channel
 	r.stubChannels = stubChannels
 
 	// create a new RTSP connection and store it
@@ -132,7 +134,7 @@ func (r *RTSP) OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, e
 	// Find RTSP connection and delete it
 	r.rtspConn.Delete(connectionKey.Key)
 
-	//Delete client from client map
+	// Delete client from client map
 	delete(r.clientMap, connectionKey.Key)
 	r.log("RTSP connection closed from client %s", connectionKey.Remote)
 
@@ -140,10 +142,10 @@ func (r *RTSP) OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, e
 }
 
 func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error) {
-	//Read stream data
+	// Read stream data
 	connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
 	var streamData *model.StreamData
-	var buffer = bytes.NewBuffer(make([]byte, 0, 4096))
+	buffer := bytes.NewBuffer(make([]byte, 0, 4096))
 
 	reqReader := bufio.NewReader(strings.NewReader(stream.Data))
 	resReader := bufio.NewReader(strings.NewReader(stream.Data))
