@@ -99,7 +99,6 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			p.log("Received DELETE event: %v", stream)
 			streamData, err = p.rtmImpl.OnDelete(connectionKey)
 			p.stubHandler.OnDelete(connectionKey, conn)
-			p.streamAPI.DeleteStream(connectionKey.Remote)
 		case pb.Event_DATA:
 			p.log("Received DATA event: %v", stream)
 			streamData, err = p.rtmImpl.OnData(conn, stream)
@@ -124,10 +123,16 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 				StreamState: streamData.StreamState,
 			}
 
-			error := p.streamAPI.Put(streamData)
-
-			if error != nil {
-				p.logError("Put stream to etcd failed %v", error)
+			if stream.Event == pb.Event_DELETE {
+				error := p.streamAPI.DeleteStream(streamData)
+				if error != nil {
+					p.logError("Put stream to etcd failed %v", error)
+				}
+			} else {
+				error := p.streamAPI.Put(streamData)
+				if error != nil {
+					p.logError("Put stream to etcd failed %v", error)
+				}
 			}
 		}
 	}
