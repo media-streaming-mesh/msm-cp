@@ -126,7 +126,7 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			if stream.Event == pb.Event_DELETE {
 				error := p.streamAPI.DeleteStream(streamData)
 				if error != nil {
-					p.logError("Put stream to etcd failed %v", error)
+					p.logError("Delete stream from etcd failed %v", error)
 				}
 			} else {
 				error := p.streamAPI.Put(streamData)

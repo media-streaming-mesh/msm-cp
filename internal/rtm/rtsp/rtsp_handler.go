@@ -243,9 +243,6 @@ func (r *RTSP) OnGetParameter(req *base.Request, connectionKey model.ConnectionK
 func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
 	r.log("[c->s] %+v", req)
 
-	// Delete client from clientMap
-	delete(r.clientMap, connectionKey.Key)
-
 	rc, err := r.getClientRTSPConnection(connectionKey)
 	if err != nil {
 		return nil, err
@@ -256,7 +253,9 @@ func (r *RTSP) OnTeardown(req *base.Request, connectionKey model.ConnectionKey) 
 
 	// Send TEARDOWN to server if last client
 	serverEp := util.GetRemoteIPv4Address(rc.targetRemote)
-	if r.getClientCount(serverEp) == 0 {
+	clientCount := r.getClientCount(serverEp)
+	r.log("Total client %v from server %v", clientCount, serverEp)
+	if clientCount == 1 {
 		res, err := r.clientToServer(req, connectionKey)
 		r.log("[s->c] TEARDOWN RESPONSE %+v", res)
 		return res, err

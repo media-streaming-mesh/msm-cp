@@ -56,8 +56,12 @@ func (s *StreamAPI) Put(data model.StreamData) error {
 	jsonData, err := json.Marshal(data)
 	stringData := string(jsonData)
 
+	if len(data.ServerPorts) == 0 || len(data.ClientPorts) == 0 {
+		return fmt.Errorf("[Stream API] streamData server/client port is empty")
+	}
+
 	// PUT data
-	key := fmt.Sprintf("streamKey:%v:%v", data.ServerIp, data.ClientIp)
+	key := fmt.Sprintf("streamKey:%v:%v:%v:%v", data.ServerIp, data.ServerPorts[0], data.ClientIp, data.ClientPorts[0])
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Put(ctx, key, stringData)
 	cancel()
@@ -121,7 +125,11 @@ func (s *StreamAPI) WatchStreams(dataChan chan<- model.StreamData) {
 }
 
 func (s *StreamAPI) DeleteStream(data model.StreamData) error {
-	key := fmt.Sprintf("streamKey:%v:%v", data.ServerIp, data.ClientIp)
+	if len(data.ServerPorts) == 0 || len(data.ClientPorts) == 0 {
+		return fmt.Errorf("[Stream API] streamData server/client port is empty")
+	}
+
+	key := fmt.Sprintf("streamKey:%v:%v:%v:%v", data.ServerIp, data.ServerPorts[0], data.ClientIp, data.ClientPorts[0])
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Delete(ctx, key)
 	cancel()
