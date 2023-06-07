@@ -56,8 +56,12 @@ func (s *StreamAPI) Put(data model.StreamData) error {
 	jsonData, err := json.Marshal(data)
 	stringData := string(jsonData)
 
+	if len(data.ServerPorts) == 0 || len(data.ClientPorts) == 0 {
+		return fmt.Errorf("[Stream API] streamData server/client port is empty")
+	}
+
 	// PUT data
-	key := fmt.Sprintf("streamKey:%v", data.ServerIp)
+	key := fmt.Sprintf("streamKey:%v:%v:%v:%v", data.ServerIp, data.ServerPorts[0], data.ClientIp, data.ClientPorts[0])
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Put(ctx, key, stringData)
 	cancel()
@@ -99,24 +103,40 @@ func (s *StreamAPI) WatchStreams(dataChan chan<- model.StreamData) {
 				// process with put event
 				var streamData model.StreamData
 				json.Unmarshal(event.Kv.Value, &streamData)
-				s.log("Stream data %v", streamData)
+				s.log("PUT Stream data %v", streamData)
 				dataChan <- streamData
 			case mvccpb.DELETE:
 				// process with delete event
+				var streamData model.StreamData
+				json.Unmarshal(event.Kv.Value, &streamData)
+				updateStreamData := model.StreamData{
+					StubIp:      streamData.StubIp,
+					ServerIp:    streamData.ServerIp,
+					ClientIp:    streamData.ClientIp,
+					ServerPorts: streamData.ServerPorts,
+					ClientPorts: streamData.ClientPorts,
+					StreamState: model.Teardown,
+				}
+				s.log("DELETE Stream data %v", updateStreamData)
+				dataChan <- updateStreamData
 			}
 		}
 	}
 }
 
-func (s *StreamAPI) DeleteStream(serverIp string) error {
-	key := fmt.Sprintf("streamKey:%v", serverIp)
+func (s *StreamAPI) DeleteStream(data model.StreamData) error {
+	if len(data.ServerPorts) == 0 || len(data.ClientPorts) == 0 {
+		return fmt.Errorf("[Stream API] streamData server/client port is empty")
+	}
+
+	key := fmt.Sprintf("streamKey:%v:%v:%v:%v", data.ServerIp, data.ServerPorts[0], data.ClientIp, data.ClientPorts[0])
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	resp, err := s.client.Delete(ctx, key)
 	cancel()
 	if err != nil {
 		return err
 	}
-	s.log("DELETE %v response %v", serverIp, resp)
+	s.log("DELETE key %v response %v", key, resp)
 
 	return nil
 }
