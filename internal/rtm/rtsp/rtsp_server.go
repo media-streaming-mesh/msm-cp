@@ -18,7 +18,6 @@ package rtsp
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -145,7 +144,6 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 	// Read stream data
 	connectionKey := model.NewConnectionKey(stream.Local, stream.Remote)
 	var streamData *model.StreamData
-	buffer := bytes.NewBuffer(make([]byte, 0, 4096))
 
 	reqReader := bufio.NewReader(strings.NewReader(stream.Data))
 	resReader := bufio.NewReader(strings.NewReader(stream.Data))
@@ -178,14 +176,13 @@ func (r *RTSP) OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*
 		if err != nil {
 			return nil, fmt.Errorf("handle request error=%s", err)
 		}
-		pbMsg.Write(buffer)
+
 		pbRes := &pb.Message{
 			Event:  stream.Event,
 			Local:  stream.Local,
 			Remote: stream.Remote,
-			Data:   fmt.Sprintf("%s", buffer),
+			Data:   pbMsg.String(),
 		}
-
 		r.log("response to client is %v", pbRes)
 
 		// Send response back to client

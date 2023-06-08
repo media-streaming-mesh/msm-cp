@@ -24,6 +24,8 @@ import (
 
 	"github.com/aler9/gortsplib/pkg/base"
 
+	"github.com/aler9/gortsplib/pkg/url"
+
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
 	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
@@ -343,7 +345,7 @@ func (r *RTSP) getHostFromEndpoint(ep string) (string, error) {
 	return host, nil
 }
 
-func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
+func (r *RTSP) getEndpointFromPath(p *url.URL) (string, error) {
 	urls := r.urlHandler.GetInternalURLs(p.String())
 
 	r.log("endpoints to connect: %v", urls)
@@ -352,7 +354,7 @@ func (r *RTSP) getEndpointFromPath(p *base.URL) (string, error) {
 		return "", errors.New("Can't get endpoint from path")
 	}
 
-	ep, err := base.ParseURL(urls[0])
+	ep, err := url.Parse(urls[0])
 	if err != nil {
 		return "", errors.New("could not parse endpoint")
 	}
@@ -477,7 +479,7 @@ func isInterleaved(value base.HeaderValue) bool {
 	return interleaved
 }
 
-func (r *RTSP) updateURLIpAddress(url *base.URL) *base.URL {
+func (r *RTSP) updateURLIpAddress(url *url.URL) *url.URL {
 	ep, err := r.getEndpointFromPath(url)
 	if err != nil {
 		r.logError("could not get endpoint from path")

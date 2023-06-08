@@ -1,7 +1,6 @@
 package stub
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"sync"
@@ -212,13 +211,11 @@ func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, reques
 			Remote: request.Remote,
 		}
 	case model.Data:
-		data := bytes.NewBuffer(make([]byte, 0, 4096))
-		request.Request.Write(data)
 		msg = &pb.Message{
 			Event:  pb.Event_DATA,
 			Local:  request.Local,
 			Remote: request.Remote,
-			Data:   fmt.Sprintf("%s", data),
+			Data:   request.Request.String(),
 		}
 	}
 	stubConn.(*StubConnection).Conn.Send(msg)

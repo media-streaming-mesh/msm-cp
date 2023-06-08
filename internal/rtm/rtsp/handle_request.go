@@ -84,7 +84,7 @@ func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKe
 		}
 
 	default:
-		return &base.Response{StatusCode: base.StatusBadRequest}, liberrors.ErrServerUnhandledRequest{Request: req}
+		return &base.Response{StatusCode: base.StatusBadRequest}, errors.New("[RTSP] Unsupported request")
 	}
 
 	if err != nil {
