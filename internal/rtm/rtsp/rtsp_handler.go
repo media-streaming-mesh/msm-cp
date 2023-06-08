@@ -18,10 +18,11 @@ package rtsp
 
 import (
 	"errors"
-	"github.com/aler9/gortsplib/pkg/base"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/aler9/gortsplib/pkg/base"
 
 	"github.com/aler9/gortsplib/pkg/url"
 
