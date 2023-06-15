@@ -19,6 +19,8 @@ package config
 
 import (
 	"flag"
+	"os"
+	"strings"
 
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
@@ -27,7 +29,7 @@ import (
 // Config holds the configuration data for the MSM control plane
 // application
 type Cfg struct {
-	Dataplane        string
+	DataPlane        string
 	Protocol         string
 	Remote           string
 	Logger           *logrus.Logger
@@ -45,31 +47,65 @@ func New() *Cfg {
 	cf := new(Cfg)
 	grpcOpt := new(grpcOpts)
 
-	flag.StringVar(&cf.Dataplane, "dataplane", "msm", "dataplane to connect to (msm, vpp)")
+	flag.StringVar(&cf.DataPlane, "dataplane", "msm", "dataplane to connect to (msm, vpp)")
 	flag.StringVar(&grpcOpt.Port, "grpcPort", "9000", "port to listen for GRPC on")
 	flag.StringVar(&cf.Protocol, "protocol", "rtsp", "control plane protocol mode (rtsp, rist)")
-	logLevel := flag.Int("loglevel", int(logrus.InfoLevel), "Log level")
 
 	flag.Parse()
 
 	cf.Logger = logrus.New()
-
-	cf.Logger.SetFormatter(&logrus.TextFormatter{
-		ForceColors:     true,
-		DisableColors:   false,
-		FullTimestamp:   true,
-		TimestampFormat: "2006-01-02 15:04:05.123",
-	})
-
-	cf.Logger.Level = logrus.Level(*logLevel)
+	cf.Logger.SetOutput(os.Stdout)
+	setLogLvl(cf.Logger)
+	setLogType(cf.Logger)
 
 	return &Cfg{
-		Dataplane: cf.Dataplane,
+		DataPlane: cf.DataPlane,
 		Protocol:  cf.Protocol,
 		Logger:    cf.Logger,
 		Remote:    cf.Remote,
 		Grpc: &grpcOpts{
 			Port: grpcOpt.Port,
 		},
+	}
+}
+
+// sets the log level of the logger
+func setLogLvl(l *logrus.Logger) {
+	logLevel := os.Getenv("LOG_LEVEL")
+
+	switch logLevel {
+	case "DEBUG":
+		l.SetLevel(logrus.DebugLevel)
+	case "WARN":
+		l.SetLevel(logrus.WarnLevel)
+	case "INFO":
+		l.SetLevel(logrus.InfoLevel)
+	case "ERROR":
+		l.SetLevel(logrus.ErrorLevel)
+	case "TRACE":
+		l.SetLevel(logrus.TraceLevel)
+	case "FATAL":
+		l.SetLevel(logrus.FatalLevel)
+	default:
+		l.SetLevel(logrus.DebugLevel)
+	}
+}
+
+// sets the log type of the logger
+func setLogType(l *logrus.Logger) {
+	logType := os.Getenv("LOG_TYPE")
+
+	switch strings.ToLower(logType) {
+	case "json":
+		l.SetFormatter(&logrus.JSONFormatter{
+			PrettyPrint: true,
+		})
+	default:
+		l.SetFormatter(&logrus.TextFormatter{
+			ForceColors:     true,
+			DisableColors:   false,
+			FullTimestamp:   true,
+			TimestampFormat: "2006-01-02 15:04:05",
+		})
 	}
 }
