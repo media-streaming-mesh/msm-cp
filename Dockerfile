@@ -30,4 +30,4 @@ WORKDIR /
 COPY --from=builder /workspace/msm-controller .
 #USER nonroot:nonroot
 
-ENTRYPOINT ["/msm-controller", "-grpcPort", "9000", "-loglevel", "5"]
+ENTRYPOINT ["/msm-controller", "-grpcPort", "9000"]
