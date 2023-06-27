@@ -23,10 +23,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"github.com/media-streaming-mesh/msm-cp/pkg/transport"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+	node_mapper "github.com/media-streaming-mesh/msm-k8s/pkg/node_mapper"
+	"github.com/media-streaming-mesh/msm-k8s/pkg/transport"
 )
 
 // App contains minimal list of dependencies to be able to start an application.

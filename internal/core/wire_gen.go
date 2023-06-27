@@ -7,9 +7,9 @@
 package core
 
 import (
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+	node_mapper "github.com/media-streaming-mesh/msm-k8s/pkg/node_mapper"
 )
 
 // Injectors from wire.go:
@@ -18,7 +18,7 @@ func InitApp() (*App, error) {
 	cfg := config.New()
 	grpcImpl := New(cfg)
 
-	nodeMapper := node_mapper.InitializeNodeMapper(cfg)
+	nodeMapper := node_mapper.InitializeNodeMapper(cfg.Logger)
 
 	app := &App{
 		cfg:        cfg,

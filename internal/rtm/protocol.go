@@ -21,14 +21,14 @@ import (
 	"errors"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	model_cp "github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm/rtsp"
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 // API provides external access to
 type API interface {
-	OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel)
+	OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model_cp.StubChannel)
 	OnDelete(connectionKey model.ConnectionKey) (*model.StreamData, error)
 	OnData(conn pb.MsmControlPlane_SendServer, stream *pb.Message) (*model.StreamData, error)
 }
@@ -54,7 +54,7 @@ func New(cfg *config.Cfg) *Protocol {
 	}
 }
 
-func (p *Protocol) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
+func (p *Protocol) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model_cp.StubChannel) {
 	proto := p.cfg.Protocol
 	switch proto {
 	case "rtsp":
