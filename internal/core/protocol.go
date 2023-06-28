@@ -6,9 +6,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-	"github.com/sirupsen/logrus"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"

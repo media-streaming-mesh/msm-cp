@@ -25,8 +25,6 @@ import (
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 
-	"github.com/media-streaming-mesh/msm-cp/internal/config"
-
 	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
 	node_mapper "github.com/media-streaming-mesh/msm-k8s/pkg/node_mapper"
 	"github.com/media-streaming-mesh/msm-k8s/pkg/transport"

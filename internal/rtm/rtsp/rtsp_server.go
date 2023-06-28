@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-
 	"github.com/sirupsen/logrus"
 
 	model_cp "github.com/media-streaming-mesh/msm-cp/internal/model"

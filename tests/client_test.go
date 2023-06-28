@@ -1,10 +1,8 @@
 package transport
 
 import (
-	"testing"
-
-
 	"github.com/sirupsen/logrus"
+	"testing"
 
 	"github.com/media-streaming-mesh/msm-k8s/pkg/transport"
 
