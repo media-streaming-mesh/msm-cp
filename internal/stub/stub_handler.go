@@ -2,11 +2,11 @@ package stub
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 
 	"github.com/media-streaming-mesh/msm-cp/internal/config"
 	model2 "github.com/media-streaming-mesh/msm-cp/internal/model"
