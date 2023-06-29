@@ -7,15 +7,18 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+
 	"google.golang.org/grpc/peer"
+
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+	node_mapper "github.com/media-streaming-mesh/msm-k8s/pkg/node_mapper"
+	"github.com/media-streaming-mesh/msm-k8s/pkg/stream_api"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
 	"github.com/media-streaming-mesh/msm-cp/internal/rtm"
 	"github.com/media-streaming-mesh/msm-cp/internal/stub"
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
-	node_mapper "github.com/media-streaming-mesh/msm-cp/pkg/node-mapper"
-	"github.com/media-streaming-mesh/msm-cp/pkg/stream_api"
 )
 
 type API interface {

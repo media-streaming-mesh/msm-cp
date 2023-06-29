@@ -13,7 +13,6 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/ internal/
-COPY pkg/ pkg/
 
 ARG TARGETOS TARGETARCH
 

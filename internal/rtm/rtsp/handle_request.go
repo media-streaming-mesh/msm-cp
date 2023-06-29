@@ -22,8 +22,11 @@ import (
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/liberrors"
 
+	model_cp "github.com/media-streaming-mesh/msm-cp/internal/model"
+
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 func (r *RTSP) handleRequest(req *base.Request, connectionKey model.ConnectionKey) (*base.Response, error) {
@@ -106,7 +109,7 @@ func (r *RTSP) handleResponse(res *base.Response, connectionKey model.Connection
 		return errors.New("Can't load stub channel")
 	}
 
-	stubChannel.Response <- model.StubChannelResponse{
+	stubChannel.Response <- model_cp.StubChannelResponse{
 		nil,
 		res,
 	}

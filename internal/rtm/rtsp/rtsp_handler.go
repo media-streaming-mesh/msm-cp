@@ -26,8 +26,10 @@ import (
 
 	"github.com/aler9/gortsplib/pkg/url"
 
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+
+	model_cp "github.com/media-streaming-mesh/msm-cp/internal/model"
 	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
 )
 
 // called after receiving an OPTIONS request.
@@ -71,8 +73,8 @@ func (r *RTSP) OnOptions(req *base.Request, connectionKey model.ConnectionKey) (
 
 	if s_rc.state < Options {
 		// Forward OPTIONS command to server pod
-		stubChannel.Request <- model.StubChannelRequest{
-			model.Data,
+		stubChannel.Request <- model_cp.StubChannelRequest{
+			model_cp.Data,
 			serverConnectionKey.Local,
 			serverConnectionKey.Remote,
 			req,
@@ -289,8 +291,8 @@ func (r *RTSP) connectToRemote(req *base.Request) (string, error) {
 		stubChannel, ok := r.stubChannels[host]
 		if ok {
 			r.log("Send REQUEST event open RTSP connection for %v", host)
-			stubChannel.Request <- model.StubChannelRequest{
-				model.Add,
+			stubChannel.Request <- model_cp.StubChannelRequest{
+				model_cp.Add,
 				"",
 				ep,
 				nil,
@@ -323,8 +325,8 @@ func (r *RTSP) clientToServer(req *base.Request, connectionKey model.ConnectionK
 	}
 
 	// Send request and waiting for response
-	stubChannel.Request <- model.StubChannelRequest{
-		model.Data,
+	stubChannel.Request <- model_cp.StubChannelRequest{
+		model_cp.Data,
 		sc.(*RTSPConnection).targetLocal,
 		sc.(*RTSPConnection).targetRemote,
 		req,

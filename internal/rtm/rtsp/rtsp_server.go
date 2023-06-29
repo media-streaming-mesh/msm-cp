@@ -23,14 +23,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/media-streaming-mesh/msm-cp/internal/util"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
-
-	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/sirupsen/logrus"
 
+	model_cp "github.com/media-streaming-mesh/msm-cp/internal/model"
+
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/util"
+
+	"github.com/aler9/gortsplib/pkg/base"
+	msm_url "github.com/media-streaming-mesh/msm-k8s/pkg/url-routing/handler"
+
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
-	msm_url "github.com/media-streaming-mesh/msm-cp/pkg/url-routing/handler"
 )
 
 type RTSP struct {
@@ -38,7 +42,7 @@ type RTSP struct {
 	logger       *logrus.Logger
 	methods      []base.Method
 	rtspConn     *sync.Map
-	stubChannels map[string]*model.StubChannel
+	stubChannels map[string]*model_cp.StubChannel
 	clientMap    map[string]Client
 }
 
@@ -97,7 +101,7 @@ func NewRTSP(opts ...Option) *RTSP {
 		logger:       cfg.Logger,
 		methods:      cfg.SupportedMethods,
 		rtspConn:     new(sync.Map),
-		stubChannels: make(map[string]*model.StubChannel),
+		stubChannels: make(map[string]*model_cp.StubChannel),
 		clientMap:    make(map[string]Client),
 	}
 }
@@ -113,7 +117,7 @@ func (r *RTSP) logError(format string, args ...interface{}) {
 }
 
 // called when a connection is opened.
-func (r *RTSP) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model.StubChannel) {
+func (r *RTSP) OnAdd(connectionKey model.ConnectionKey, stubChannels map[string]*model_cp.StubChannel) {
 	// Store channel
 	r.stubChannels = stubChannels
 

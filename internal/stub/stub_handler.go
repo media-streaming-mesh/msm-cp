@@ -6,11 +6,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/media-streaming-mesh/msm-cp/pkg/config"
-	"github.com/media-streaming-mesh/msm-cp/pkg/model"
+	"github.com/sirupsen/logrus"
+
+	"github.com/media-streaming-mesh/msm-cp/internal/config"
+	model2 "github.com/media-streaming-mesh/msm-cp/internal/model"
+
+	"github.com/media-streaming-mesh/msm-k8s/pkg/model"
 
 	"github.com/aler9/gortsplib/pkg/base"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/peer"
 
 	pb "github.com/media-streaming-mesh/msm-cp/api/v1alpha1/msm_stub"
@@ -41,7 +44,7 @@ type Client struct {
 
 type StubHandler struct {
 	logger       *logrus.Logger
-	StubChannels map[string]*model.StubChannel
+	StubChannels map[string]*model2.StubChannel
 }
 
 func NewStubHandler(cfg *config.Cfg) *StubHandler {
@@ -49,7 +52,7 @@ func NewStubHandler(cfg *config.Cfg) *StubHandler {
 
 	return &StubHandler{
 		logger:       cfg.Logger,
-		StubChannels: make(map[string]*model.StubChannel),
+		StubChannels: make(map[string]*model2.StubChannel),
 	}
 }
 
@@ -75,7 +78,7 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 	s.log("Connection for client: %s successfully registered", remoteAddr)
 
 	// create channels
-	channel := model.NewStubChannel()
+	channel := model2.NewStubChannel()
 	s.StubChannels[remoteAddr] = &channel
 	s.log("Add channels to %v", remoteAddr)
 
@@ -83,8 +86,8 @@ func (s *StubHandler) OnRegistration(conn pb.MsmControlPlane_SendServer, proxyIp
 	s.waitForRequest(remoteAddr)
 
 	// send config
-	channel.Request <- model.StubChannelRequest{
-		model.Config,
+	channel.Request <- model2.StubChannelRequest{
+		model2.Config,
 		"",
 		proxyIp,
 		nil,
@@ -101,7 +104,7 @@ func (s *StubHandler) OnAdd(conn pb.MsmControlPlane_SendServer, stream *pb.Messa
 		stubChannel, ok := s.StubChannels[stubAddr]
 		if ok {
 			stubChannel.Key = model.NewConnectionKey(stream.Local, stream.Remote)
-			stubChannel.Response <- model.StubChannelResponse{
+			stubChannel.Response <- model2.StubChannelResponse{
 				nil,
 				&base.Response{
 					StatusCode: base.StatusOK,
@@ -186,13 +189,13 @@ func (s *StubHandler) waitForRequest(key string) {
 	channel := s.StubChannels[key]
 	go func() {
 		request := <-channel.Request
-		timeout := request.Type != model.Config
+		timeout := request.Type != model2.Config
 		s.log("Processing request %v", request.Type)
 		s.sendRequest(channel, key, request, timeout)
 	}()
 }
 
-func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, request model.StubChannelRequest, timeout bool) {
+func (s *StubHandler) sendRequest(channel *model2.StubChannel, key string, request model2.StubChannelRequest, timeout bool) {
 	stubConn, ok := StubMap.Load(key)
 	if !ok {
 		s.logError("could not find stub connection for %v", key)
@@ -200,17 +203,17 @@ func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, reques
 
 	var msg *pb.Message
 	switch request.Type {
-	case model.Config:
+	case model2.Config:
 		msg = &pb.Message{
 			Event:  pb.Event_CONFIG,
 			Remote: fmt.Sprintf("%s:8050", request.Remote),
 		}
-	case model.Add:
+	case model2.Add:
 		msg = &pb.Message{
 			Event:  pb.Event_REQUEST,
 			Remote: request.Remote,
 		}
-	case model.Data:
+	case model2.Data:
 		msg = &pb.Message{
 			Event:  pb.Event_DATA,
 			Local:  request.Local,
@@ -230,7 +233,7 @@ func (s *StubHandler) sendRequest(channel *model.StubChannel, key string, reques
 		if channel.ReceivedResponse == false {
 			s.log("Timeout request %v %v", request.Type, request.Request)
 			s.logError("Send %v to %v timeout", request.Type, key)
-			channel.Response <- model.StubChannelResponse{
+			channel.Response <- model2.StubChannelResponse{
 				fmt.Errorf("Stub request timeout"),
 				&base.Response{
 					StatusCode: base.StatusRequestTimeout,
