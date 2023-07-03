@@ -9,5 +9,4 @@ Goal is that control planes themselves are pluggable (we may move RTSP into a se
 Control plane interacts with:
 
 1. MSM-stub (to exchange control plane messages over gRPC)
-2. MSM-k8s library (to write stream map entries for the network controller, 
-
+2. MSM-k8s library (to write stream map entries for the network controller, to resolve URLs to K8s endpoints, and to interface to MSM's gRPC APIs)
