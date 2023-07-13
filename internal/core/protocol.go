@@ -127,14 +127,21 @@ func (p *Protocol) Send(conn pb.MsmControlPlane_SendServer) error {
 			}
 
 			if stream.Event == pb.Event_DELETE {
-				error := p.streamAPI.DeleteStream(streamData)
+				error := p.streamAPI.Delete(streamData)
 				if error != nil {
-					p.logError("Delete stream from etcd failed %v", error)
+					p.logError("Delete cr failed %v", error)
 				}
 			} else {
-				error := p.streamAPI.Put(streamData)
-				if error != nil {
-					p.logError("Put stream to etcd failed %v", error)
+				if streamData.StreamState == model.Create {
+					error := p.streamAPI.Create(streamData)
+					if error != nil {
+						p.logError("Add cr failed %v", error)
+					}
+				} else if streamData.StreamState == model.Play {
+					error := p.streamAPI.Update(streamData)
+					if error != nil {
+						p.logError("Delete cr failed %v", error)
+					}
 				}
 			}
 		}
