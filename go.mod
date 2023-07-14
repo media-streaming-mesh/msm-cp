@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/aler9/gortsplib v1.0.1
 	github.com/google/wire v0.5.0
-	github.com/media-streaming-mesh/msm-k8s v0.0.0-20230713120052-1825807d988d
+	github.com/media-streaming-mesh/msm-k8s v0.0.0-20230714192442-326751a6ce55
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.56.2
