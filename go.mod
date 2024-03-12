@@ -8,9 +8,8 @@ require (
 	github.com/media-streaming-mesh/msm-k8s v0.0.0-20230627222835-e21f87de8760
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/grpc v1.62.0
+	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.33.0
-)
 
 require (
 	github.com/coreos/go-semver v0.3.1 // indirect
