@@ -1,6 +1,6 @@
 module github.com/media-streaming-mesh/msm-cp
 
-go 1.20
+go 1.22
 
 require (
 	github.com/aler9/gortsplib v1.0.1
