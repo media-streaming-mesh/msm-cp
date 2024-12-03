@@ -7,7 +7,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/media-streaming-mesh/msm-k8s v0.0.0-20240513174318-bceaab5a5a2c
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.2
 )
